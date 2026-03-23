@@ -207,7 +207,7 @@ export function saveFixedModal() {
   state.fixedExpenses = newFixed;
   saveState();
   document.getElementById('fixed-modal-overlay').classList.add('hidden');
-  renderCashflow();
+  if (window.appRenderAll) window.appRenderAll(); else renderCashflow(); // [FIX] Reatividade sistêmica
   showToast('Custos fixos salvos.', 'success');
 }
 
@@ -253,7 +253,7 @@ export function saveBudgets() {
   });
   saveState();
   document.getElementById('budget-modal-overlay').classList.add('hidden');
-  renderEnvelopes(); // Or call appRenderAll if needed
+  if (window.appRenderAll) window.appRenderAll(); else renderEnvelopes(); // [FIX] Reatividade sistêmica
   showToast('Orçamentos salvos com sucesso.', 'success');
 }
 

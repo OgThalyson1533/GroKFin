@@ -124,7 +124,7 @@ export function deleteCardTx(cardId, txId) {
   if (tx) card.used = Math.max(0, Number((card.used - tx.value).toFixed(2)));
   card.invoices = card.invoices.filter(t => t.id !== txId);
   saveState();
-  renderCards();
+  if (window.appRenderAll) window.appRenderAll(); else renderCards(); // [FIX] Reatividade sistêmica
   selectCard(cardId);
   showToast('Lançamento removido da fatura.', 'info');
 }
@@ -155,7 +155,7 @@ export function deleteCard(id) {
   state.cards = state.cards.filter(c => c.id !== id);
   if (_activeCardId === id) _activeCardId = null;
   saveState();
-  renderCards();
+  if (window.appRenderAll) window.appRenderAll(); else renderCards(); // [FIX] Reatividade sistêmica
   showToast('Cartão removido.', 'info');
 }
 
@@ -195,7 +195,7 @@ export function saveCardModal() {
   _editingCardId = null;
   saveState();
   document.getElementById('card-modal-overlay').classList.add('hidden');
-  renderCards();
+  if (window.appRenderAll) window.appRenderAll(); else renderCards(); // [FIX] Reatividade sistêmica
 }
 
 export function saveCardTx() {
@@ -225,7 +225,7 @@ export function saveCardTx() {
   card.used = Number((card.used + amount).toFixed(2));
   saveState();
   document.getElementById('card-tx-modal-overlay').classList.add('hidden');
-  renderCards();
+  if (window.appRenderAll) window.appRenderAll(); else renderCards(); // [FIX] Reatividade sistêmica
   selectCard(_activeCardId);
   showToast(installments > 1 ? `Compra parcelada em ${installments}x lançada.` : 'Lançamento adicionado à fatura.', 'success');
 }

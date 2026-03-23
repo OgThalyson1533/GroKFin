@@ -160,7 +160,7 @@ export function openEditInv(id) {
 export function deleteInv(id) {
   state.investments = (state.investments || []).filter(i => i.id !== id);
   saveState();
-  renderInvestments();
+  if (window.appRenderAll) window.appRenderAll(); // [FIX] Reatividade sistêmica
   showToast('Ativo removido.', 'info');
 }
 
@@ -189,7 +189,7 @@ export function saveInvModal() {
   _editingInvId = null;
   saveState();
   document.getElementById('inv-modal-overlay').classList.add('hidden');
-  renderInvestments();
+  if (window.appRenderAll) window.appRenderAll(); // [FIX] Integridade visual inter-abas
 }
 
 export function bindInvestmentEvents() {

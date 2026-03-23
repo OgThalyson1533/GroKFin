@@ -46,6 +46,33 @@ export function renderDashboard(analytics) {
     monthlyNetChip.innerHTML = `<i class="fa-solid ${analytics.net >= 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i> ${analytics.net >= 0 ? '+' : '-'}${formatMoney(Math.abs(analytics.net))} no mês`;
   }
 
+  // Evolução Receitas vs Mês Anterior
+  const incomeEvo = el('income-evo');
+  if (incomeEvo) {
+    if (analytics.lastMonthIncomes > 0) {
+      const diff = ((analytics.incomes - analytics.lastMonthIncomes) / analytics.lastMonthIncomes) * 100;
+      incomeEvo.textContent = `${diff >= 0 ? '+' : ''}${formatPercent(diff, 0)}`;
+      incomeEvo.className = `absolute right-3.5 top-3.5 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md border text-white/90 ${diff >= 0 ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/20 border-rose-500/30 text-rose-300'}`;
+    } else {
+      incomeEvo.textContent = '--';
+      incomeEvo.className = 'absolute right-3.5 top-3.5 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md bg-white/5 text-white/40 border border-white/5';
+    }
+  }
+
+  // Evolução Despesas vs Mês Anterior
+  const expenseEvo = el('expense-evo');
+  if (expenseEvo) {
+    if (analytics.lastMonthExpenses > 0) {
+      const diff = ((analytics.expenses - analytics.lastMonthExpenses) / analytics.lastMonthExpenses) * 100;
+      expenseEvo.textContent = `${diff > 0 ? '+' : ''}${formatPercent(diff, 0)}`;
+      // Aumento de despesa é negativo visualmente (vermelho), redução é positivo (verde)
+      expenseEvo.className = `absolute right-3.5 top-3.5 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md border text-white/90 ${diff <= 0 ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/20 border-rose-500/30 text-rose-300'}`;
+    } else {
+      expenseEvo.textContent = '--';
+      expenseEvo.className = 'absolute right-3.5 top-3.5 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md bg-white/5 text-white/40 border border-white/5';
+    }
+  }
+
   if (el('usd-rate')) el('usd-rate').textContent = formatNumber(state.exchange.usd, 2);
   if (el('eur-rate')) el('eur-rate').textContent = formatNumber(state.exchange.eur, 2);
   if (el('btc-rate')) el('btc-rate').textContent = formatMoneyShort(state.exchange.btc).replace('R$ ', '');
@@ -235,7 +262,7 @@ export function renderReport(analytics) {
           <p class="text-xs font-bold uppercase tracking-[.22em] text-cyan-200/60">Diagnóstico executivo</p>
           <h4 class="mt-4 text-2xl font-black text-white">Seu dinheiro fecha o mês com ${formatMoney(analytics.net)} de fluxo líquido.</h4>
           <p class="mt-4 text-base leading-relaxed text-white/76">
-            A principal pressão está em <strong class="text-white">${escapeHtml(analytics.topCategory.name)}</strong>, enquanto o score da saúde financeira hoje está em <strong class="text-white">${analytics.healthScore}/100</strong>.
+            A principal pressão está em <strong class="text-white">${escapeHtml(analytics.topCategory?.name || 'N/A')}</strong>, enquanto o score da saúde financeira hoje está em <strong class="text-white">${analytics.healthScore || 0}/100</strong>.
             ${analytics.overspend ? `A categoria ${escapeHtml(analytics.overspend.cat)} já passou do orçamento e merece ajuste imediato.` : 'Como nenhum orçamento principal foi rompido, o cenário é favorável para acelerar metas.'}
           </p>
           <div class="mt-5 flex flex-wrap gap-2">

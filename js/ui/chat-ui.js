@@ -176,54 +176,78 @@ export async function sendGeminiMessage(userText, apiKey) {
 }
 
 export function buildAssistantReply(rawText) {
-  const question = normalizeText(rawText);
+  const q = normalizeText(rawText);
   const analytics = calculateAnalytics(state);
 
-  if (question.includes('saldo') || question.includes('quanto tenho') || question.includes('caixa')) {
-    return `Seu saldo disponível agora é **${formatMoney(state.balance)}**. No mês, você está com fluxo líquido de **${formatMoney(analytics.net)}**.`;
+  // Intent: Saldo / Patrimônio
+  if (/saldo|quanto (tenho|dinheiro)|caixa|patrimonio/.test(q)) {
+    return `Seu saldo em conta no momento é de **${formatMoney(state.balance)}**. No mês atual, você está com um fluxo líquido de **${formatMoney(analytics.net)}**. Se precisar, também posso detalhar seus gastos ou projetar seu caixa.`;
   }
 
-  if (question.includes('gasto') || question.includes('despesa') || question.includes('onde')) {
-    if (!analytics.categories.length) {
-      return 'Ainda não há despesas suficientes para identificar uma categoria dominante.';
-    }
+  // Intent: Gastos específicos por categoria (ex: "gasto com alimentação")
+  const gastocats = ['alimentacao', 'comida', 'mercado', 'restaurante', 'transporte', 'uber', 'gasolina', 'lazer', 'saude', 'moradia'];
+  const matchedCat = gastocats.find(c => q.includes(c));
+  if (matchedCat && /gasto|despesa|custo/.test(q)) {
+    // Map fuzzy matches to exact categories
+    const catMap = { alimentacao: 'Alimentação', comida: 'Alimentação', mercado: 'Alimentação', restaurante: 'Alimentação', transporte: 'Transporte', uber: 'Transporte', gasolina: 'Transporte', lazer: 'Lazer', saude: 'Saúde', moradia: 'Moradia' };
+    const exactCat = catMap[matchedCat];
+    const catSpentMs = state.transactions.filter(t => t.cat === exactCat && t.value < 0).reduce((a, t) => a + Math.abs(t.value), 0);
+    const budget = state.budgets[exactCat];
+    return `Você gastou **${formatMoney(catSpentMs)}** com **${exactCat}** este mês.${budget ? ` Isso representa **${formatPercent((catSpentMs/budget)*100,0)}** do seu teto estipulado para esta área.` : ''}`;
+  }
+
+  // Intent: Maior gasto
+  if (/gasto|despesa|onde|estou gastando mais/.test(q)) {
+    if (!analytics.categories.length) return 'Ainda não há despesas suficientes registradas neste mês para podermos calcular seu maior ralo de dinheiro.';
     const [category, value] = analytics.categories[0];
-    const budget = state.budgets[category];
-    const ratio = budget ? (value / budget) * 100 : null;
-    return `Sua maior pressão está em **${category}**, com **${formatMoney(value)}** no mês.${ratio ? ` Isso representa **${formatPercent(ratio, 0)}** do orçamento dessa categoria.` : ''}`;
+    return `Sua maior pressão financeira no momento é **${category}**, acumulando **${formatMoney(value)}** em despesas no mês. Talvez seja um bom ponto para avaliarmos otimizações.`;
   }
 
-  if (question.includes('meta') || question.includes('objetivo') || question.includes('acelerar') || question.includes('caminho')) {
+  // Intent: Metas e objetivos
+  if (/meta|objetivo|acelerar|caminho|sonho/.test(q)) {
     const goal = analytics.urgentGoal;
-    if (!goal) return 'Você não tem metas em aberto agora. Dá para criar uma nova meta e eu monto o plano na hora.';
-    return `A meta mais sensível hoje é **${goal.nome}**. Ela está em **${goal.progress}%** e pede cerca de **${formatMoney(goal.monthlyNeed)}/mês** para bater o prazo.`;
+    if (!goal) return 'Parece que você não possui metas ativas. Podemos cadastrar um novo objetivo na aba Metas e eu ajudarei a traçar um plano de aportes.';
+    return `Sua prioridade atual é a meta **"${goal.nome}"**. Ela se encontra com **${goal.progress}%** concluídos. Para atingi-la no prazo, o ideal é investir cerca de **${formatMoney(goal.monthlyNeed)}** todos os meses.`;
   }
 
-  if (question.includes('econom') || question.includes('cortar') || question.includes('poupar')) {
+  // Intent: Planejamento / Economia / Cortes
+  if (/econom|cortar|poupar|ajudar|dica/.test(q)) {
     if (analytics.overspend) {
       const exceed = Math.max(0, analytics.overspend.value - analytics.overspend.limit);
-      return `O corte mais inteligente está em **${analytics.overspend.cat}**. Só de voltar para o orçamento planejado, você libera **${formatMoney(exceed)}** no mês.`;
+      return `Seu orçamento em **${analytics.overspend.cat}** estourou. Uma manobra rápida seria reduzir os custos aí, o que liberaria **${formatMoney(exceed)}** para compor seu fluxo ou investir.`;
     }
-    return `Sua taxa de poupança atual é **${formatPercent(analytics.savingRate, 1)}**. O jeito mais simples de melhorar isso é segurar **${analytics.topCategory.name}**, hoje a categoria mais pesada do mês.`;
+    return `Sua taxa de poupança encontra-se em **${formatPercent(analytics.savingRate, 1)}**. Para dar um boost nisso, o melhor caminho é focar em enxugar **${analytics.topCategory?.name || 'suas despesas secundárias'}**, que tem pesado bastante ultimamente.`;
   }
 
-  if (question.includes('dolar') || question.includes('euro') || question.includes('btc') || question.includes('bitcoin') || question.includes('cambio')) {
-    return `Agora o câmbio local está em **USD ${state.exchange.usd}**, **EUR ${state.exchange.eur}** e **BTC R$ ${state.exchange.btc}**. Posso cruzar isso com uma meta sua se quiser.`;
+  // Intent: Cartões e faturas
+  if (/cartao|fatura|credito|limite/.test(q)) {
+    if (!state.cards || state.cards.length === 0) return 'Você não tem cartões de crédito monitorados no sistema. Caso possua, você pode adicioná-los na aba Cartões para visualizar as faturas aqui.';
+    const nextFatura = [...state.cards].sort((a,b) => b.used - a.used)[0];
+    return `O seu cartão com maior saldo em uso no momento é o **${nextFatura.name}**, totalizando **${formatMoney(nextFatura.used)}** utilizados no limite. Fique atento às datas de corte!`;
   }
 
-  if (question.includes('relatorio') || question.includes('diagnostico') || question.includes('resumo')) {
-    return `Resumo rápido: fluxo líquido de **${formatMoney(analytics.net)}**, taxa de poupança em **${formatPercent(analytics.savingRate, 1)}**, runway de **${(analytics.runwayMonths||0).toFixed(1)} meses** e principal pressão em **${analytics.topCategory.name}**.`;
+  // Intent: Câmbio / Cotação
+  if (/dolar|euro|btc|bitcoin|cambio|moeda/.test(q)) {
+    return `Acompanhando o mercado em tempo real: O **USD** está cotado em **R$ ${state.exchange.usd}**; o **EUR** em **R$ ${state.exchange.eur}**; e o **Bitcoin** batendo **R$ ${state.exchange.btc}**. Ideal para quem planeja exposições internacionais.`;
   }
 
-  if (question.includes('burn') || question.includes('queimando') || question.includes('dia')) {
-    return `Seu burn médio está em **${formatMoney(analytics.burnDaily)} por dia**. No ritmo atual, seu caixa cobre cerca de **${(analytics.runwayMonths||0).toFixed(1)} meses**.`;
+  // Intent: Diagnóstico completo
+  if (/relatorio|diagnostico|resumo|geral|analytics/.test(q)) {
+    return `**Diagnóstico Elite Automático**\n• Fluxo Líquido: **${formatMoney(analytics.net)}**\n• Poupando: **${formatPercent(analytics.savingRate, 1)}** de tudo que entra\n• Runway (fôlego do caixa base): **${(analytics.runwayMonths||0).toFixed(1)} meses**\n• Seu maior custo atual: **${analytics.topCategory?.name || 'N/A'}**.`;
   }
 
-  if (question.includes('ola') || question.includes('oi') || question.includes('bom dia') || question.includes('boa tarde') || question.includes('boa noite')) {
-    return 'Oi! Posso te responder sobre saldo, metas, categoria que mais pesa, câmbio ou transformar um comprovante em transação.';
+  // Intent: Runway / Burn rate
+  if (/burn|queimando|dia|folego/.test(q)) {
+    return `Calculando o custo de vida... Você tem queimado, em média, **${formatMoney(analytics.burnDaily)} por dia**. Se todas as receitas parassem agora, seu caixa atual seguraria a operação por cerca de **${(analytics.runwayMonths||0).toFixed(1)} meses**.`;
   }
 
-  return `Posso te ajudar com **saldo**, **maiores gastos**, **metas**, **relatório** e **câmbio**. Tenta algo como: **"onde estou gastando mais?"** ou **"qual meta devo acelerar?"**`;
+  // Intent: Saudações
+  if (/^(oi|ola|bom dia|boa tarde|boa noite|e ai|tudo bem)/.test(q)) {
+    return `Olá${state.profile?.nickname ? ' ' + state.profile.nickname : ''}! Sou o cérebro financeiro do GrokFin. Tente me perguntar qual foi o seu maior gasto do mês, ou quanto você deve economizar para sua próxima meta.`;
+  }
+
+  // Default fallback
+  return `O que acha de explorarmos seus dados? Posso gerar o **resumo financeiro**, identificar **fugas de capital**, simular seu **burn diário** ou até registrar transações se você descrever um gasto (ex: "gastei 50 com uber"). Quais informações você precisa agora?`;
 }
 
 export function handleBotTransaction(text) {

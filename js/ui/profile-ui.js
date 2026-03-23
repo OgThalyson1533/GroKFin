@@ -16,9 +16,38 @@ function resolveProfile(p = {}) {
     displayName: p.displayName || 'GrokFin User',
     handle: p.handle || '@grokfin.user',
     bio: p.bio || 'Organizando minha vida financeira com eficiência brutal. Cortando excessos, focando no que importa.',
+    theme: p.theme || 'cyber',
     avatarImage: p.avatarImage || null, // Se null, na visualização ele cai pro default
     bannerImage: p.bannerImage || null
   };
+}
+
+function applyThemeToGlows(theme) {
+  const g1 = document.getElementById('app-glow-1');
+  const g2 = document.getElementById('app-glow-2');
+  const g3 = document.getElementById('app-glow-3');
+  if (!g1 || !g2 || !g3) return;
+
+  // Limpar defaults color classes (Regex simples e eficiente)
+  [g1, g2, g3].forEach(el => el.className = el.className.replace(/bg-[a-z]+-\d+\/\d+/g, '').trim());
+
+  if (theme === 'royal') {
+    g1.classList.add('bg-violet-600/20');
+    g2.classList.add('bg-fuchsia-500/15');
+    g3.classList.add('bg-purple-800/15');
+  } else if (theme === 'gold') {
+    g1.classList.add('bg-amber-500/15');
+    g2.classList.add('bg-yellow-600/10');
+    g3.classList.add('bg-orange-500/12');
+  } else if (theme === 'minimal') {
+    g1.classList.add('bg-slate-500/5');
+    g2.classList.add('bg-gray-600/5');
+    g3.classList.add('bg-zinc-700/8');
+  } else { // Cyber / Default
+    g1.classList.add('bg-cyan-400/10');
+    g2.classList.add('bg-violet-500/12');
+    g3.classList.add('bg-emerald-400/8');
+  }
 }
 
 export function applyProfileBindings(profile) {
@@ -57,6 +86,8 @@ export function applyProfileBindings(profile) {
   document.querySelectorAll('[data-profile-bg="banner"]').forEach(el => {
     if (bannerUrl) el.style.backgroundImage = `url('${bannerUrl}')`;
   });
+
+  applyThemeToGlows(profile.theme);
 }
 
 function fillProfileInputs(profile) {
@@ -68,6 +99,9 @@ function fillProfileInputs(profile) {
 
   const handleInput = document.getElementById('profile-handle-input');
   if (handleInput) handleInput.value = profile.handle;
+
+  const themeInput = document.getElementById('profile-theme-input');
+  if (themeInput) themeInput.value = profile.theme || 'cyber';
 }
 
 export function setProfileEditMode(isEditing) {
@@ -231,6 +265,10 @@ export function bindProfileEvents() {
   });
   document.getElementById('profile-handle-input')?.addEventListener('input', event => {
     updateProfileDraftField('handle', event.currentTarget.value);
+  });
+  
+  document.getElementById('profile-theme-input')?.addEventListener('change', event => {
+    updateProfileDraftField('theme', event.currentTarget.value);
   });
   
   document.getElementById('profile-avatar-input')?.addEventListener('change', event => handleProfileImageUpload(event, 'avatar'));

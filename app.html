@@ -30,6 +30,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <!-- [NEW] OCR Client-Side nativo para recibos -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" rel="stylesheet">
   <!-- CSS Modular (extraído do Fin.html sem alterar nenhum estilo) -->
   <link rel="stylesheet" href="./css/base.css">
@@ -38,10 +40,10 @@
   <link rel="stylesheet" href="./css/components.css">
 </head>
 <body class="selection:bg-cyan-300 selection:text-black">
-  <div class="pointer-events-none fixed inset-0 overflow-hidden">
-    <div class="absolute -top-24 left-[8%] h-72 w-72 rounded-full bg-cyan-400/10 blur-[120px]"></div>
-    <div class="absolute top-28 right-[10%] h-72 w-72 rounded-full bg-violet-500/12 blur-[120px]"></div>
-    <div class="absolute bottom-0 left-[35%] h-80 w-80 rounded-full bg-emerald-400/8 blur-[120px]"></div>
+  <div class="pointer-events-none fixed inset-0 overflow-hidden" id="app-glow-container">
+    <div id="app-glow-1" class="absolute -top-24 left-[8%] h-72 w-72 rounded-full bg-cyan-400/10 blur-[120px] transition-colors duration-1000"></div>
+    <div id="app-glow-2" class="absolute top-28 right-[10%] h-72 w-72 rounded-full bg-violet-500/12 blur-[120px] transition-colors duration-1000"></div>
+    <div id="app-glow-3" class="absolute bottom-0 left-[35%] h-80 w-80 rounded-full bg-emerald-400/8 blur-[120px] transition-colors duration-1000"></div>
   </div>
 
   <div class="relative min-h-screen">
@@ -173,13 +175,15 @@
 <span class="pill status-up" id="monthly-net-chip"><i class="fa-solid fa-arrow-trend-up"></i> +R$ 0,00 no mês</span>
 </div>
 <div class="mt-6 grid grid-cols-2 gap-3">
-<div class="rounded-2xl border border-white/8 bg-black/20 p-4">
-<p class="text-xs uppercase tracking-[.18em] text-white/32">Entradas</p>
-<p class="mt-2 text-2xl font-bold text-emerald-300" id="dashboard-income">R$ 0,00</p>
+<div class="rounded-2xl border border-white/8 bg-black/20 p-4 relative overflow-hidden group">
+  <p class="text-xs uppercase tracking-[.18em] text-white/32">Entradas</p>
+  <p class="mt-2 text-2xl font-bold text-emerald-300" id="dashboard-income">R$ 0,00</p>
+  <span class="absolute right-3.5 top-3.5 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md bg-white/5 text-white/40 border border-white/5" id="income-evo" title="Evolução vs Mês Anterior">--</span>
 </div>
-<div class="rounded-2xl border border-white/8 bg-black/20 p-4">
-<p class="text-xs uppercase tracking-[.18em] text-white/32">Saídas</p>
-<p class="mt-2 text-2xl font-bold text-rose-300" id="dashboard-expense">R$ 0,00</p>
+<div class="rounded-2xl border border-white/8 bg-black/20 p-4 relative overflow-hidden group">
+  <p class="text-xs uppercase tracking-[.18em] text-white/32">Saídas</p>
+  <p class="mt-2 text-2xl font-bold text-rose-300" id="dashboard-expense">R$ 0,00</p>
+  <span class="absolute right-3.5 top-3.5 text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-md bg-white/5 text-white/40 border border-white/5" id="expense-evo" title="Evolução vs Mês Anterior">--</span>
 </div>
 <div class="rounded-2xl border border-white/8 bg-black/20 p-4">
 <p class="text-xs uppercase tracking-[.18em] text-white/32">Runway</p>
@@ -793,6 +797,15 @@
         <span class="text-xs font-bold uppercase tracking-[.18em] text-white/38">Nome de usuário (@handle)</span>
         <input id="profile-handle-input" type="text" class="profile-input" placeholder="@grokfin.user">
       </label>
+      <label class="block space-y-2 md:col-span-2">
+        <span class="text-xs font-bold uppercase tracking-[.18em] text-white/38">Ondas de Fundo (Tema)</span>
+        <select id="profile-theme-input" class="profile-input bg-[#08111c]">
+          <option value="cyber">Cyberpunk (Cyan / Esmeralda / Roxo)</option>
+          <option value="royal">Ametista (Violeta Profundo / Fúcsia)</option>
+          <option value="gold">Gold V.I.P (Âmbar / Dourado Clássico)</option>
+          <option value="minimal">Minimalista (Escuro Absoluto / Chumbo)</option>
+        </select>
+      </label>
     </div>
     <div class="mt-6 rounded-2xl border border-cyan-300/15 bg-cyan-300/6 p-4 text-sm leading-relaxed text-white/75">
       O modo de edição respeita a estética atual do app: mesmas cores, mesmo vidro fosco, mesmas bordas suaves e o mesmo brilho dos cards já existentes.
@@ -1072,7 +1085,14 @@
     <div class="w-full max-w-md rounded-[24px] border border-white/10 p-0 overflow-hidden shadow-2xl"
          style="background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.04))">
       <div class="flex items-center justify-between px-6 py-5 border-b border-white/8">
-        <h3 class="text-lg font-bold text-white" id="tx-modal-title">Nova Transação</h3>
+        <div class="flex items-center gap-3">
+          <h3 class="text-lg font-bold text-white tracking-tight" id="tx-modal-title">Nova Transação</h3>
+          <!-- Botão Smart OCR -->
+          <button id="tx-ocr-btn" title="Ler Comprovante (Inteligência Offline)" class="flex h-8 px-3 items-center gap-2 rounded-lg bg-emerald-400/10 text-xs font-bold text-emerald-400 transition-colors hover:bg-emerald-400/20">
+            <i class="fa-solid fa-camera"></i> <span class="hidden sm:inline">Scanner Inteligente</span>
+          </button>
+          <input type="file" id="tx-ocr-input" accept="image/*" class="hidden" />
+        </div>
         <button id="tx-modal-close" class="w-9 h-9 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/60 hover:bg-white/10 transition-colors">
           <i class="fa-solid fa-xmark"></i>
         </button>

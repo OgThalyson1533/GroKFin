@@ -111,55 +111,74 @@ export function renderGoals(analytics) {
         const themeLabel = getGoalThemeLabel(theme);
         const goalImage = goal.customImage || pickGoalImage(goal.nome, goal.theme || theme);
 
+        let smartTip = '';
+        if (progress >= 100) {
+          smartTip = '<i class="fa-solid fa-trophy text-emerald-300"></i> Meta atingida! Considere investir o valor ou iniciar um novo objetivo.';
+        } else if (contribution > 0 && contribution < monthlyNeed) {
+          const shortage = monthlyNeed - contribution;
+          smartTip = `<i class="fa-solid fa-arrow-trend-up text-fuchsia-300"></i> Aporte sugerido de ${formatMoney(monthlyNeed)}. Faltam ${formatMoney(shortage)} este mês para manter o prazo.`;
+        } else if (contribution >= monthlyNeed && monthlyNeed > 0) {
+          smartTip = '<i class="fa-solid fa-fire text-orange-400"></i> No ritmo perfeito! Você está cobrindo o aporte mensal necessário.';
+        } else {
+          smartTip = '<i class="fa-solid fa-lightbulb text-cyan-300"></i> Qualquer valor poupado agora acelera o seu prazo original.';
+        }
+
         return `
-          <article class="goal-card group glass-panel card-hover relative isolate min-h-[22rem] overflow-hidden rounded-[30px] p-6">
-            <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style="background-image:url('${goalImage}')"></div>
-            <div class="relative z-10 flex h-full flex-col justify-between">
-              <div class="flex items-start justify-between gap-3">
+          <article class="goal-card group glass-panel card-hover relative isolate min-h-[24rem] flex flex-col overflow-hidden rounded-[30px] p-6 sm:p-7">
+            <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105 opacity-40 mix-blend-overlay" style="background-image:url('${goalImage}')"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-[#060911] via-[#060911]/80 to-transparent z-0"></div>
+            
+            <div class="relative z-10 flex h-full flex-col">
+              <div class="flex items-start justify-between gap-3 mb-auto">
                 <div class="flex flex-wrap gap-2">
                   <span class="pill ${statusClass}">${progress}% concluída</span>
                   <span class="pill tone-slate"><i class="fa-solid fa-image text-cyan-300"></i> ${escapeHtml(themeLabel)}</span>
                 </div>
-                <span class="pill">${escapeHtml(formatMonthYear(goal.deadline))}</span>
+                <span class="pill shrink-0 whitespace-nowrap">${escapeHtml(formatMonthYear(goal.deadline))}</span>
               </div>
 
-              <div class="space-y-5">
+              <div class="mt-6 flex flex-col gap-5">
                 <div>
-                  <h4 class="text-2xl font-black text-white">${escapeHtml(goal.nome)}</h4>
-                  <p class="mt-2 text-sm text-white/70">Meta alvo ${formatMoney(goal.total)} • faltam ${formatMoney(remaining)}</p>
+                  <h4 class="text-2xl font-black text-white leading-tight">${escapeHtml(goal.nome)}</h4>
+                  <p class="mt-2 text-sm font-medium text-white/70">Alvo ${formatMoney(goal.total)} <span class="mx-1">•</span> Faltam ${formatMoney(remaining)}</p>
                 </div>
 
                 <div>
                   <div class="mb-2 flex items-center justify-between text-sm">
-                    <span class="text-white/65">${formatMoney(goal.atual)} guardados</span>
-                    <strong class="text-white">${progress}%</strong>
+                    <span class="font-semibold text-white/80"><span class="text-white">${formatMoney(goal.atual)}</span> guardados</span>
+                    <strong class="text-white bg-white/10 px-2 py-0.5 rounded-md">${progress}%</strong>
                   </div>
-                  <div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div>
+                  <div class="progress-track h-2.5 bg-black/40 border border-white/5"><div class="progress-fill shadow-[0_0_10px_rgba(0,245,255,0.4)]" style="width:${progress}%"></div></div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
-                  <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p class="text-xs uppercase tracking-[.18em] text-white/34">Aporte ideal</p>
-                    <p class="mt-2 text-lg font-bold text-cyan-200">${formatMoney(monthlyNeed)}</p>
+                  <div class="rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-sm">
+                    <p class="text-[10px] sm:text-xs uppercase tracking-[.15em] text-white/40 font-bold">Aporte ideal</p>
+                    <p class="mt-1.5 text-lg font-black text-cyan-300">${formatMoney(monthlyNeed)}</p>
                   </div>
-                  <div class="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p class="text-xs uppercase tracking-[.18em] text-white/34">Prazo</p>
-                    <p class="mt-2 text-lg font-bold text-white">${escapeHtml(formatMonthYear(goal.deadline))}</p>
+                  <div class="rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-sm">
+                    <p class="text-[10px] sm:text-xs uppercase tracking-[.15em] text-white/40 font-bold">Prazo</p>
+                    <p class="mt-1.5 text-lg font-black text-white">${escapeHtml(formatMonthYear(goal.deadline))}</p>
                   </div>
                 </div>
 
-                <div class="flex flex-wrap gap-3">
-                  <button data-goal-contribute="${goal.id}" data-amount="${contribution}" class="rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 px-4 py-3 text-sm font-bold text-black shadow-brand ${contribution > 0 ? '' : 'pointer-events-none opacity-50'}">
+                <!-- Smart Intelligence Box -->
+                <div class="rounded-xl bg-gradient-to-r from-white/5 to-transparent border-l-2 border-cyan-400 p-3 text-[13px] leading-relaxed text-white/75 font-medium shadow-inner">
+                  ${smartTip}
+                </div>
+
+                <div class="mt-2 flex flex-wrap gap-2 sm:gap-3 items-center">
+                  <button data-goal-contribute="${goal.id}" data-amount="${contribution}" class="flex-1 min-w-[120px] rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 px-4 py-3 sm:py-3.5 text-sm font-black text-black shadow-brand transition-transform hover:scale-[1.02] active:scale-95 ${contribution > 0 ? '' : 'pointer-events-none opacity-50 grayscale'}">
                     ${contribution > 0 ? `Aportar ${formatMoney(contribution)}` : 'Concluída'}
                   </button>
-                  <button data-goal-brief="${goal.id}" class="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/16">
-                    Ler com IA
+                  <button data-goal-brief="${goal.id}" class="shrink-0 flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 w-12 h-11 sm:h-12 text-white transition-colors hover:bg-white/15" title="Ler com IA">
+                    <i class="fa-solid fa-robot"></i>
                   </button>
-                  <button onclick="openEditGoal('${goal.id}')" class="w-10 h-10 flex items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-400 hover:bg-cyan-400/20 transition-colors" title="Editar meta">
-                    <i class="fa-solid fa-pen text-xs"></i>
+                  <button onclick="openEditGoal('${goal.id}')" class="shrink-0 flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 w-12 h-11 sm:h-12 text-white transition-colors hover:bg-white/15" title="Editar meta">
+                    <i class="fa-solid fa-pen"></i>
                   </button>
-                  <button onclick="confirmDeleteGoal('${goal.id}')" class="w-10 h-10 flex items-center justify-center rounded-2xl border border-rose-400/20 bg-rose-400/10 text-rose-400 hover:bg-rose-400/20 transition-colors" title="Excluir meta">
-                    <i class="fa-solid fa-trash-can text-xs"></i>
+                  <button onclick="confirmDeleteGoal('${goal.id}')" class="shrink-0 flex items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 w-12 h-11 sm:h-12 text-rose-400 transition-colors hover:bg-rose-500/20" title="Excluir meta">
+                    <i class="fa-solid fa-trash-can"></i>
                   </button>
                 </div>
               </div>

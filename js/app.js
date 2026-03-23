@@ -3,11 +3,11 @@
  * Orquestrador central da aplicação modular.
  */
 
-import { loadState, state } from './state.js';
+import { loadState, saveState, state } from './state.js';
 import { initAuth } from './services/auth.js';
 import { isSupabaseConfigured } from './services/supabase.js';
 import { bindNavigationEvents, syncLocationHash, syncActiveViewLabel, switchTab } from './ui/navigation.js';
-import { bindDashboardEvents, renderDashboard, renderHeaderMeta } from './ui/dashboard-ui.js';
+import { bindDashboardEvents, renderDashboard, renderHeaderMeta, renderReport } from './ui/dashboard-ui.js';
 import { renderCharts } from './ui/charts.js';
 import { bindTxEvents, renderTransactions } from './ui/transactions-ui.js';
 import { bindGoalEvents, renderGoals } from './ui/goals-ui.js';
@@ -16,21 +16,31 @@ import { bindCashflowEvents, renderCashflow } from './ui/cashflow-ui.js';
 import { bindInvestmentEvents, renderInvestments } from './ui/investments-ui.js';
 import { bindChatEvents } from './ui/chat-ui.js';
 import { bindProfileEvents, renderProfile } from './ui/profile-ui.js';
-import { calculateAnalytics } from './analytics/engine.js';
+import { calculateAnalytics, processRecurrences } from './analytics/engine.js';
 import { showToast } from './utils/dom.js';
 import { initOnboarding } from './ui/onboarding.js';
 
+let renderAnimationFrame = null;
+
 window.renderAll = function() {
-  const analytics = calculateAnalytics(state);
+  if (renderAnimationFrame) cancelAnimationFrame(renderAnimationFrame);
   
-  renderProfile(analytics);
-  renderDashboard(analytics);
-  renderCharts(analytics);
-  renderTransactions();
-  renderGoals(analytics);
-  renderCards();
-  renderCashflow();
-  renderInvestments();
+  renderAnimationFrame = requestAnimationFrame(() => {
+    const analytics = calculateAnalytics(state);
+    
+    renderHeaderMeta(analytics);
+    renderProfile(analytics);
+    renderDashboard(analytics);
+    renderReport(analytics);   // Aba Diagnóstico acoplada
+    renderCharts(analytics);
+    renderTransactions();
+    renderGoals(analytics);
+    renderCards();
+    renderCashflow();
+    renderInvestments();
+    
+    renderAnimationFrame = null;
+  });
 }
 
 window.appRenderAll = window.renderAll;
@@ -47,6 +57,12 @@ async function initApp() {
   // 1. Carrega dados do localStorage ou gera banco inicial
   const loadedState = loadState();
   Object.assign(state, loadedState);
+
+  // 1.5 Roda o Cron-Job Local de Recorrências Fixas
+  const cronDidChanges = processRecurrences(state);
+  if (cronDidChanges) {
+    saveState();
+  }
 
   // 2. Configura a Chart.js global
   if (window.Chart) {

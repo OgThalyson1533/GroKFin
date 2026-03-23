@@ -75,6 +75,23 @@ export function calculateAnalytics(state) {
   const expenses = monthTransactions.filter(t => t.value < 0).reduce((acc, t) => acc + Math.abs(t.value), 0);
   const net      = incomes - expenses;
 
+  // Evolução Mensal (Mês Anterior)
+  // [FIX] Evolução Mês a Mês
+  const refDate = getReferenceDate(state);
+  const lastMonthStartRange = new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1);
+  const lastMonthEndRange   = new Date(refDate.getFullYear(), refDate.getMonth(), 0);
+  
+  let lastMonthIncomes = 0;
+  let lastMonthExpenses = 0;
+
+  state.transactions?.forEach(t => {
+    const d = parseDateBR(t.date); // Use parseDateBR for consistency
+    if (d && d >= lastMonthStartRange && d <= lastMonthEndRange) {
+      if (t.value > 0) lastMonthIncomes += t.value;
+      else lastMonthExpenses += Math.abs(t.value);
+    }
+  });
+
   const expenseItems   = monthTransactions.filter(t => t.value < 0);
   const categoriesMap  = expenseItems.reduce((acc, t) => {
     acc[t.cat] = (acc[t.cat] || 0) + Math.abs(t.value);
@@ -158,6 +175,7 @@ export function calculateAnalytics(state) {
 
   return {
     ref, monthTransactions, incomes, expenses, net,
+    lastMonthIncomes, lastMonthExpenses,
     categories: categoryEntries, topCategory,
     burnDaily, runwayMonths, savingRate, avgTicket,
     budgetUse, overspend, healthScore, expenseTrend,
@@ -251,4 +269,47 @@ export function buildSmartInsights(analytics, state) {
   }
 
   return insights.slice(0, 4);
+}
+
+// ── Cron-Job Simulado: Lançamentos Recorrentes ──────────────────────────────────
+export function processRecurrences(state) {
+  if (!state.fixedExpenses || state.fixedExpenses.length === 0) return false;
+  
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+  
+  if (state.lastCronRun === currentMonthKey) return false;
+
+  let changesMade = false;
+  state.fixedExpenses.forEach(exp => {
+    const alreadyLaunched = state.transactions.some(t => {
+      const parts = t.date.split('-');
+      if (parts.length !== 3) return false;
+      return parseInt(parts[0]) === now.getFullYear() && 
+             parseInt(parts[1]) - 1 === now.getMonth() && 
+             t.desc.toLowerCase() === exp.name.toLowerCase();
+    });
+
+    if (!alreadyLaunched && exp.value > 0) {
+      const txDay = String(exp.day || 1).padStart(2, '0');
+      const txMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const txDate = `${now.getFullYear()}-${txMonth}-${txDay}`;
+      
+      const val = -Math.abs(exp.value);
+      state.transactions.push({
+        id: 'tx-cron-' + Math.random().toString(36).substring(2, 9),
+        desc: exp.name,
+        value: val,
+        cat: exp.category || 'Moradia',
+        date: txDate,
+        payment: 'conta',
+        recurringTemplate: true
+      });
+      state.balance += val;
+      changesMade = true;
+    }
+  });
+
+  state.lastCronRun = currentMonthKey;
+  return changesMade;
 }

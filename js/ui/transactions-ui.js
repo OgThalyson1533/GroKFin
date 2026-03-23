@@ -257,9 +257,114 @@ export function openEditTx(id) {
   }
 }
 
+export async function handleOcrImageInput(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const btn = document.getElementById('tx-ocr-btn');
+  const ogHtml = btn.innerHTML;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span class="hidden sm:inline">Lendo...</span>';
+  btn.disabled = true;
+  btn.style.opacity = '0.7';
+  
+  try {
+    if (!window.Tesseract) throw new Error('OCR Indisponível (Sem internet para carregar o Tesseract)');
+    const worker = await Tesseract.createWorker('por');
+    const { data: { text } } = await worker.recognize(file);
+    await worker.terminate();
+    
+    // Procura por formato de Moeda: R$ 10,00 ou 10.00
+    const valueMatch = text.match(/(?:R\$|r\$)?\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2}))/);
+    if (valueMatch) {
+      document.getElementById('tx-modal-value').value = valueMatch[1];
+    } else {
+      // Tenta numero simples com ponto ou virgula no final do texto
+      const simpleMatch = text.match(/(\d+[.,]\d{2})\b/);
+      if (simpleMatch) document.getElementById('tx-modal-value').value = simpleMatch[1].replace('.', ',');
+    }
+    
+    // Tenta pinçar um nome descritivo (linha mais longa que não pareça apenas números/datas)
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 4);
+    const descLine = lines.find(l => !l.includes('R$') && !/\d{2,}/.test(l) && !l.toLowerCase().includes('total'));
+    if (descLine) {
+      document.getElementById('tx-modal-desc').value = descLine.substring(0, 30);
+    } else {
+      document.getElementById('tx-modal-desc').value = 'Comprovante Escaneado';
+    }
+    
+    const expRadio = document.getElementById('tx-type-expense');
+    if (expRadio) expRadio.checked = true;
+
+    showToast('Comprovante processado! Revise os valores.', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Falha ao extrair texto da imagem.', 'danger');
+  } finally {
+    btn.innerHTML = ogHtml;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    e.target.value = '';
+  }
+}
+
 export function confirmDeleteTx(id) {
   _txToDelete = id;
   document.getElementById('tx-delete-overlay')?.classList.remove('hidden');
+}
+
+export function exportTransactionsCSV() {
+  if (!state.transactions || !state.transactions.length) return showToast('Nenhuma transação para exportar', 'warning');
+  
+  const csvRows = ['Data,Descricao,Categoria,Valor'];
+  [...state.transactions].sort((a,b)=> new Date(b.date)-new Date(a.date)).forEach(t => {
+    const valStr = t.value.toFixed(2).replace('.', ',');
+    csvRows.push(`"${t.date}","${t.desc}","${t.cat}","${valStr}"`);
+  });
+  
+  const bom = "\uFEFF"; 
+  const blob = new Blob([bom + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `grokfin_extrato_${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Download do CSV concluído.', 'success');
+}
+
+export function exportTransactionsPDF() {
+  if (!window.jspdf) return showToast('Módulo PDF carregando. Tente novamente.', 'warning');
+  if (!state.transactions || !state.transactions.length) return showToast('Nenhuma transação para exportar', 'warning');
+
+  const doc = new window.jspdf.jsPDF();
+  doc.text('GrokFin Elite - Extrato de Transações', 14, 15);
+  doc.setFontSize(10);
+  doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 14, 22);
+
+  const tableData = [...state.transactions].sort((a,b)=> new Date(b.date)-new Date(a.date)).map(t => {
+    const dObj = new Date(t.date + 'T12:00:00');
+    return [
+      dObj.toLocaleDateString('pt-BR'),
+      t.desc,
+      t.cat,
+      (t.value > 0 ? '+' : '') + formatMoney(Math.abs(t.value))
+    ];
+  });
+
+  doc.autoTable({
+    startY: 28,
+    head: [['Data', 'Descrição', 'Categoria', 'Valor']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: { fillColor: [0, 245, 255], textColor: [0,0,0] },
+    alternateRowStyles: { fillColor: [245, 245, 245] },
+    styles: { font: 'helvetica', fontSize: 9 }
+  });
+
+  doc.save(`grokfin_extrato_${new Date().toISOString().split('T')[0]}.pdf`);
+  showToast('Download do PDF concluído.', 'success');
 }
 
 export function deleteTx() {
@@ -380,6 +485,223 @@ export function bindTxEvents() {
     const periodLabel = document.getElementById('tx-period-label');
     if (periodLabel) periodLabel.textContent = 'Filtrar por período';
   });
+
+  // Filtro de Calendário Visual Dinâmico
+  const periodBtn = el('tx-period-btn');
+  const periodWrapper = el('tx-period-wrapper');
+
+  if (periodBtn && periodWrapper) {
+    const CAL_MONTH_NAMES = ['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+    let calState = {
+      current: new Date(),
+      start: null,
+      end: null,
+      savedStart: null,
+      savedEnd: null
+    };
+
+    function calIsSame(a, b) {
+      if (!a || !b) return false;
+      return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    }
+    function calInRange(d) {
+      if (!calState.start || !calState.end) return false;
+      return d > calState.start && d < calState.end;
+    }
+    
+    function updateCalFooter() {
+      const ft = document.getElementById('cal-footer-label');
+      if (!ft) return;
+      if (calState.start && calState.end) {
+        ft.innerHTML = `<span style="color:rgba(255,255,255,.55)">De</span> ${calState.start.toLocaleDateString('pt-BR')} <span style="color:rgba(255,255,255,.55)">até</span> ${calState.end.toLocaleDateString('pt-BR')}`;
+      } else if (calState.start) {
+        ft.textContent = `Início: ${calState.start.toLocaleDateString('pt-BR')} — selecione o fim`;
+      } else {
+        ft.textContent = 'Selecione o período';
+      }
+    }
+
+    function renderCalendar() {
+      const grid = document.getElementById('cal-grid');
+      const display = document.getElementById('cal-month-display');
+      if (!grid || !display) return;
+
+      display.textContent = `${CAL_MONTH_NAMES[calState.current.getMonth()]} ${calState.current.getFullYear()}`;
+      grid.innerHTML = '';
+      ['DOM','SEG','TER','QUA','QUI','SEX','SAB'].forEach(d => {
+        grid.innerHTML += `<div class="text-center text-[10px] font-bold tracking-widest pb-2" style="color:rgba(255,255,255,.35)">${d}</div>`;
+      });
+
+      const year = calState.current.getFullYear();
+      const month = calState.current.getMonth();
+      const firstDay = new Date(year, month, 1).getDay();
+      const totalDays = new Date(year, month + 1, 0).getDate();
+
+      for (let i = 0; i < firstDay; i++) grid.innerHTML += `<div></div>`;
+
+      for (let i = 1; i <= totalDays; i++) {
+        const thisDate = new Date(year, month, i, 12);
+        const isStart = calIsSame(thisDate, calState.start);
+        const isEnd = calIsSame(thisDate, calState.end);
+        const inRange = calInRange(thisDate);
+        let cls = 'aspect-square flex items-center justify-center text-sm font-medium rounded-xl cursor-pointer transition-all ';
+        let style = '';
+        if (isStart || isEnd) {
+          cls += 'font-bold text-black ';
+          style = 'background:linear-gradient(135deg,#00f5ff,#00ff85);box-shadow:0 0 12px rgba(0,245,255,.3)';
+        } else if (inRange) {
+          cls += 'text-cyan-300 ';
+          style = 'background:rgba(0,245,255,.1)';
+        } else {
+          cls += 'text-white/80 hover:bg-white/10 ';
+        }
+        grid.innerHTML += `<div class="${cls}" style="${style}" data-cal-day="${i}">${i}</div>`;
+      }
+      grid.dataset.calYear = year;
+      grid.dataset.calMonth = month;
+      updateCalFooter();
+    }
+
+    function updatePeriodLabel() {
+      const btn = document.getElementById('tx-period-label');
+      if (!btn) return;
+      if (calState.savedStart && calState.savedEnd) {
+        btn.textContent = `${calState.savedStart.toLocaleDateString('pt-BR')} → ${calState.savedEnd.toLocaleDateString('pt-BR')}`;
+        btn.style.color = '#00f5ff';
+      } else {
+        btn.textContent = 'Filtrar por período';
+        btn.style.color = '';
+      }
+    }
+
+    if (!document.getElementById('tx-calendar-dropdown')) {
+      const drop = document.createElement('div');
+      drop.id = 'tx-calendar-dropdown';
+      drop.className = 'hidden absolute top-[115%] right-0 z-[60] w-[340px] overflow-hidden rounded-[20px] border border-cyan-400/20 bg-[#0f1829] shadow-[0_32px_72px_rgba(0,0,0,.95),inset_0_0_0_1px_rgba(255,255,255,.05)]';
+      drop.innerHTML = `
+        <div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div id="cal-month-display" class="text-xs font-bold uppercase tracking-widest text-white/80">—</div>
+          <div class="flex gap-2">
+            <button id="cal-prev" class="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-xs text-white transition-colors hover:bg-white/10"><i class="fa-solid fa-chevron-left"></i></button>
+            <button id="cal-next" class="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-xs text-white transition-colors hover:bg-white/10"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </div>
+        <div class="p-3">
+          <div id="cal-grid" class="grid grid-cols-7 gap-y-0.5 gap-x-0"></div>
+        </div>
+        <div id="cal-footer-label" class="border-t border-white/10 px-5 py-2.5 text-center text-xs font-semibold tracking-wide text-cyan-400/80">Selecione o período</div>
+        <div class="flex gap-2 p-4 pt-0">
+          <button id="cal-clear-btn" class="flex-1 rounded-xl border border-white/10 bg-white/5 p-2.5 text-xs font-semibold text-white/60 transition-colors hover:bg-white/10">Limpar</button>
+          <button id="cal-apply-btn" class="flex-1 rounded-xl border-none p-2.5 text-xs font-bold text-black transition-opacity hover:opacity-90" style="background:linear-gradient(135deg,#00f5ff,#00ff85)">Aplicar</button>
+        </div>
+      `;
+      document.body.appendChild(drop);
+
+      // Função auxiliar para reposicionar
+      function positionDropdown() {
+        const btn = document.getElementById('tx-period-btn');
+        const drp = document.getElementById('tx-calendar-dropdown');
+        if (!btn || !drp) return;
+        const rect = btn.getBoundingClientRect();
+        drp.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+        drp.style.right = (document.body.clientWidth - rect.right) + 'px'; // alinha à direita do botão
+      }
+
+      window.addEventListener('resize', positionDropdown);
+      window.addEventListener('scroll', positionDropdown, true);
+
+      drop.addEventListener('click', e => {
+        const dayEl = e.target.closest('[data-cal-day]');
+        if (dayEl) {
+          e.stopPropagation();
+          const grid = document.getElementById('cal-grid');
+          const clicked = new Date(parseInt(grid.dataset.calYear), parseInt(grid.dataset.calMonth), parseInt(dayEl.dataset.calDay), 12);
+          if (!calState.start || (calState.start && calState.end)) {
+            calState.start = clicked; calState.end = null;
+          } else if (clicked < calState.start) {
+            calState.start = clicked;
+          } else {
+            calState.end = clicked;
+          }
+          renderCalendar();
+          return;
+        }
+
+        if (e.target.closest('#cal-prev')) { e.stopPropagation(); calState.current.setMonth(calState.current.getMonth() - 1); renderCalendar(); return; }
+        if (e.target.closest('#cal-next')) { e.stopPropagation(); calState.current.setMonth(calState.current.getMonth() + 1); renderCalendar(); return; }
+        
+        if (e.target.closest('#cal-clear-btn')) {
+          e.stopPropagation();
+          calState.start = null; calState.end = null; calState.savedStart = null; calState.savedEnd = null;
+          state.ui.txDateStart = null; state.ui.txDateEnd = null;
+          updatePeriodLabel(); renderCalendar(); drop.classList.add('hidden');
+          state.ui.txPage = 0; renderTransactions(); return;
+        }
+
+        if (e.target.closest('#cal-apply-btn')) {
+          e.stopPropagation();
+          if (!calState.start) return;
+          calState.savedStart = calState.start;
+          calState.savedEnd = calState.end || calState.start;
+          updatePeriodLabel(); drop.classList.add('hidden');
+          state.ui.txDateStart = calState.savedStart.toISOString().split('T')[0];
+          state.ui.txDateEnd = calState.savedEnd.toISOString().split('T')[0];
+          state.ui.txPage = 0; renderTransactions(); return;
+        }
+        e.stopPropagation();
+      });
+
+      document.body.addEventListener('click', e => {
+        if (!e.target.closest('#tx-period-wrapper') && !e.target.closest('#tx-calendar-dropdown')) {
+          document.getElementById('tx-calendar-dropdown').classList.add('hidden');
+        }
+      });
+    }
+
+    periodBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const drop = document.getElementById('tx-calendar-dropdown');
+      
+      const btn = document.getElementById('tx-period-btn');
+      const rect = btn.getBoundingClientRect();
+      drop.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+      // Tentativa de alinhar a direita ou esquerda dependendo do espaço (simplificada para manter à direita do botão)
+      drop.style.right = 'auto';
+      drop.style.left = rect.left + 'px';
+
+      // Se a tela for pequena ou vazar, ajusta
+      if (rect.left + 340 > window.innerWidth) {
+        drop.style.left = 'auto';
+        drop.style.right = (document.body.clientWidth - rect.right) + 'px';
+      }
+
+      if (drop.classList.contains('hidden')) {
+        calState.current = calState.savedStart ? new Date(calState.savedStart) : new Date();
+        calState.start = calState.savedStart ? new Date(calState.savedStart) : null;
+        calState.end = calState.savedEnd ? new Date(calState.savedEnd) : null;
+        renderCalendar();
+        drop.classList.remove('hidden');
+      } else {
+        drop.classList.add('hidden');
+      }
+    });
+
+    if (state.ui.txDateStart && state.ui.txDateEnd) {
+      calState.savedStart = new Date(state.ui.txDateStart + 'T12:00:00');
+      calState.savedEnd = new Date(state.ui.txDateEnd + 'T12:00:00');
+      updatePeriodLabel();
+    }
+  }
+
+  const ocrBtn = el('tx-ocr-btn');
+  const ocrInput = el('tx-ocr-input');
+  if (ocrBtn && ocrInput) {
+    ocrBtn.addEventListener('click', () => ocrInput.click());
+    ocrInput.addEventListener('change', handleOcrImageInput);
+  }
+
+  el('tx-export-csv')?.addEventListener('click', exportTransactionsCSV);
+  el('tx-export-pdf')?.addEventListener('click', exportTransactionsPDF);
 
   el('tx-add-btn')?.addEventListener('click', openTxModal);
   el('tx-modal-cancel')?.addEventListener('click', () => { el('tx-modal-overlay')?.classList.add('hidden'); });
