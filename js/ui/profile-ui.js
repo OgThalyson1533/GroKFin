@@ -1,0 +1,229 @@
+/**
+ * js/ui/profile-ui.js
+ * Lógica do perfil do usuário, edição de draft e bind dos inputs visuais.
+ */
+
+import { state, saveState } from '../state.js';
+import { formatMoney } from '../utils/format.js';
+import { calculateAnalytics } from '../analytics/engine.js';
+import { showToast } from '../utils/dom.js';
+
+export const profileEditor = { isEditing: false, draft: null };
+
+function resolveProfile(p = {}) {
+  return {
+    nickname: p.nickname || 'Anônimo',
+    displayName: p.displayName || 'GrokFin User',
+    handle: p.handle || '@grokfin.user',
+    bio: p.bio || 'Organizando minha vida financeira com eficiência brutal. Cortando excessos, focando no que importa.',
+    avatarImage: p.avatarImage || null, // Se null, na visualização ele cai pro default
+    bannerImage: p.bannerImage || null
+  };
+}
+
+export function applyProfileBindings(profile) {
+  document.querySelectorAll('[data-bind="profile.nickname"]').forEach(el => {
+    el.textContent = profile.nickname;
+  });
+  document.querySelectorAll('[data-bind="profile.displayName"]').forEach(el => {
+    if (el.tagName === 'INPUT') el.value = profile.displayName;
+    else el.textContent = profile.displayName;
+  });
+  document.querySelectorAll('[data-bind="profile.handle"]').forEach(el => {
+    if (el.tagName === 'INPUT') el.value = profile.handle;
+    else el.textContent = profile.handle;
+  });
+  document.querySelectorAll('[data-bind="profile.bio"]').forEach(el => {
+    if (el.tagName === 'TEXTAREA') el.value = profile.bio;
+    else el.textContent = profile.bio;
+  });
+
+  // Somente a UI sabe criar a dataUrl default baseada em SVG,
+  // ou poderíamos exportar criar createDefaultAvatarDataUrl no utils, 
+  // mas aqui simplificaremos verificando se tem a imagem salva.
+  const avatarUrl = profile.avatarImage || (window.createDefaultAvatarDataUrl ? window.createDefaultAvatarDataUrl(profile.displayName) : '');
+  const bannerUrl = profile.bannerImage || (window.createDefaultBannerDataUrl ? window.createDefaultBannerDataUrl() : '');
+
+  document.querySelectorAll('[data-bind="profile.avatarImage"]').forEach(img => {
+    img.src = avatarUrl;
+  });
+  document.querySelectorAll('[data-bind="profile.bannerImage"]').forEach(img => {
+    img.src = bannerUrl;
+  });
+}
+
+function fillProfileInputs(profile) {
+  const nicknameInput = document.getElementById('profile-nickname-input');
+  if (nicknameInput) nicknameInput.value = profile.nickname;
+
+  const displayNameInput = document.getElementById('profile-displayname-input');
+  if (displayNameInput) displayNameInput.value = profile.displayName;
+
+  const handleInput = document.getElementById('profile-handle-input');
+  if (handleInput) handleInput.value = profile.handle;
+}
+
+export function setProfileEditMode(isEditing) {
+  profileEditor.isEditing = isEditing;
+  const els = [
+    document.getElementById('profile-edit-tools'),
+    document.getElementById('profile-save-btn')
+  ];
+  els.forEach(el => {
+    if (el) el.style.display = isEditing ? '' : 'none';
+  });
+
+  const toggleBtn = document.getElementById('profile-edit-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.innerHTML = isEditing ? '<i class="fa-solid fa-xmark"></i>' : '<i class="fa-solid fa-pen text-sm"></i>';
+    toggleBtn.title = isEditing ? 'Cancelar edição' : 'Editar perfil';
+    toggleBtn.classList.toggle('bg-rose-500/10', isEditing);
+    toggleBtn.classList.toggle('text-rose-400', isEditing);
+    toggleBtn.classList.toggle('border-rose-500/20', isEditing);
+  }
+
+  document.getElementById('profile-preview-mode')?.classList.toggle('hidden', isEditing);
+  document.getElementById('profile-edit-mode')?.classList.toggle('hidden', !isEditing);
+}
+
+export function startProfileEditing() {
+  profileEditor.draft = resolveProfile(state.profile || {});
+  setProfileEditMode(true);
+  fillProfileInputs(profileEditor.draft);
+}
+
+export function cancelProfileEditing() {
+  profileEditor.draft = null;
+  setProfileEditMode(false);
+  renderProfile(calculateAnalytics(state));
+}
+
+function sanitizeHandle(value = '') {
+  const clean = String(value)
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '');
+  return `@${clean || 'grokfin.user'}`;
+}
+
+export function updateProfileDraftField(field, value) {
+  if (!profileEditor.isEditing) {
+    startProfileEditing();
+  }
+  
+  const defaults = { nickname: 'Anônimo', displayName: 'GrokFin User', handle: '@grokfin.user' };
+  const nextValue = field === 'handle'
+    ? sanitizeHandle(value)
+    : (String(value).trim() || defaults[field] || '');
+
+  profileEditor.draft = resolveProfile({ ...(profileEditor.draft || state.profile || {}), [field]: nextValue });
+  applyProfileBindings(profileEditor.draft);
+
+  if (field === 'handle') {
+    const handleInput = document.getElementById('profile-handle-input');
+    if (handleInput) handleInput.value = nextValue;
+  }
+}
+
+export function saveProfileDraft() {
+  if (!profileEditor.isEditing) return;
+  state.profile = resolveProfile(profileEditor.draft || state.profile || {});
+  state.lastUpdated = new Date().toISOString();
+  saveState();
+  profileEditor.draft = null;
+  setProfileEditMode(false);
+  
+  if (window.renderHeaderMeta) window.renderHeaderMeta(calculateAnalytics(state));
+  renderProfile(calculateAnalytics(state));
+  showToast('Perfil salvo no dispositivo.', 'success');
+}
+
+export function renderProfile(analytics) {
+  const profileToRender = profileEditor.isEditing
+    ? resolveProfile(profileEditor.draft || state.profile || {})
+    : resolveProfile(state.profile || {});
+
+  if (!profileEditor.isEditing) {
+    state.profile = profileToRender;
+  }
+
+  applyProfileBindings(profileToRender);
+  fillProfileInputs(profileToRender);
+  setProfileEditMode(profileEditor.isEditing);
+
+  const goalsDone = (state.goals || []).filter(g => {
+    const progress = Math.min(Math.round((g.atual / g.total) * 100), 100);
+    return progress >= 100;
+  }).length;
+  
+  const elMetricGoals = document.getElementById('profile-metric-goals');
+  if (elMetricGoals) elMetricGoals.textContent = String((state.goals || []).length);
+  
+  const elMetricTx = document.getElementById('profile-metric-transactions');
+  if (elMetricTx) elMetricTx.textContent = String((state.transactions || []).length);
+  
+  const elMetricCompleted = document.getElementById('profile-metric-completed');
+  if (elMetricCompleted) elMetricCompleted.textContent = String(goalsDone);
+  
+  const elBalancePill = document.getElementById('profile-balance-pill');
+  if (elBalancePill) elBalancePill.textContent = formatMoney(state.balance);
+  
+  const elHealthPill = document.getElementById('profile-health-pill');
+  if (elHealthPill) elHealthPill.textContent = `${analytics?.healthScore || 0}/100`;
+
+  if (window.updateInstallButtons) window.updateInstallButtons();
+}
+
+/** Resize image helper (async, to use via event bindings) */
+export async function handleProfileImageUpload(event, type) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!profileEditor.isEditing) {
+    startProfileEditing();
+  }
+  try {
+    const options = type === 'avatar'
+      ? { width: 512, height: 512, quality: 0.88 }
+      : { width: 1600, height: 640, quality: 0.82 };
+    
+    // Calls external resize util if available
+    const dataUrl = window.resizeImageFile ? await window.resizeImageFile(file, options) : null;
+    if (!dataUrl) throw new Error('Resize tool missing');
+    
+    profileEditor.draft = resolveProfile(profileEditor.draft || state.profile || {});
+    if (type === 'avatar') {
+      profileEditor.draft.avatarImage = dataUrl;
+    } else {
+      profileEditor.draft.bannerImage = dataUrl;
+    }
+    applyProfileBindings(profileEditor.draft);
+    showToast(type === 'avatar' ? 'Prévia do avatar atualizada. Salve para confirmar.' : 'Prévia da capa atualizada. Salve para confirmar.', 'info');
+  } catch (err) {
+    showToast('Não foi possível processar essa imagem.', 'danger');
+  } finally {
+    event.target.value = '';
+  }
+}
+
+export function bindProfileEvents() {
+  document.getElementById('profile-edit-toggle-btn')?.addEventListener('click', () => {
+    if (profileEditor.isEditing) cancelProfileEditing();
+    else startProfileEditing();
+  });
+
+  document.getElementById('profile-save-btn')?.addEventListener('click', saveProfileDraft);
+  
+  document.getElementById('profile-nickname-input')?.addEventListener('input', event => {
+    updateProfileDraftField('nickname', event.currentTarget.value);
+  });
+  document.getElementById('profile-displayname-input')?.addEventListener('input', event => {
+    updateProfileDraftField('displayName', event.currentTarget.value);
+  });
+  document.getElementById('profile-handle-input')?.addEventListener('input', event => {
+    updateProfileDraftField('handle', event.currentTarget.value);
+  });
+  
+  document.getElementById('profile-avatar-input')?.addEventListener('change', event => handleProfileImageUpload(event, 'avatar'));
+  document.getElementById('profile-banner-input')?.addEventListener('change', event => handleProfileImageUpload(event, 'banner'));
+}
