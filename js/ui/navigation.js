@@ -55,7 +55,7 @@ export function switchTab(index, { force = false, skipHistory = false } = {}) {
   if (targetEl) targetEl.classList.add('active');
 
   // Atualizar sidebar UI (Desktop)
-  document.querySelectorAll('.sidebar-link').forEach(link => {
+  document.querySelectorAll('.sidebar-link, .nav-rail-button').forEach(link => {
     link.classList.toggle('active', parseInt(link.dataset.tab) === target);
   });
 
@@ -123,7 +123,7 @@ export function closeMaisSheet() {
 }
 
 export function bindNavigationEvents() {
-  document.querySelectorAll('.sidebar-link').forEach(link => {
+  document.querySelectorAll('.sidebar-link, .nav-rail-button').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       switchTab(parseInt(link.dataset.tab));

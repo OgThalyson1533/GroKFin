@@ -9,7 +9,7 @@ import { clamp } from '../utils/math.js';
 import { toneForCategory } from '../config.js';
 import { buildPrimaryInsight, buildSmartInsights, getHealthCaption } from '../analytics/engine.js';
 import { formatLongDate, formatShortTime } from '../utils/date.js';
-import { syncActiveViewLabel } from './navigation.js';
+import { syncActiveViewLabel, switchTab } from './navigation.js';
 
 let currentInsight = { label: 'Aplicar', action: { type: 'noop' } };
 
@@ -302,4 +302,48 @@ export function renderReport(analytics) {
       </section>
     `;
   }
+}
+
+export function bindDashboardEvents() {
+  const el = id => document.getElementById(id);
+  
+  el('refresh-btn')?.addEventListener('click', () => {
+    if (window.renderAll) window.renderAll();
+  });
+
+  el('manage-budgets-btn')?.addEventListener('click', () => {
+    import('../utils/dom.js').then(m => m.showToast('Funcionalidade de orçamento em breve', 'info'));
+  });
+
+  document.querySelectorAll('[data-quick-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.quickAction;
+      if (action === 'open-goals') switchTab(4);
+      else if (action === 'open-report') switchTab(1);
+      else if (action === 'open-transactions') switchTab(2);
+      else if (action === 'ask-burn' || action === 'open-chat') {
+        switchTab(3);
+        const input = document.getElementById('chat-input');
+        if (input && action === 'ask-burn') {
+          input.value = "Quanto estou queimando por dia?";
+          setTimeout(() => document.getElementById('chat-send-btn')?.click(), 100);
+        }
+      }
+      else if (action === 'apply-insight') {
+         switchTab(1);
+         import('../utils/dom.js').then(m => m.showToast('Recomendação avaliada e aplicada no diagnóstico.', 'success'));
+      }
+    });
+  });
+  
+  document.querySelectorAll('[data-chat-prompt]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchTab(3);
+      const input = document.getElementById('chat-input');
+      if (input) {
+        input.value = btn.dataset.chatPrompt;
+        setTimeout(() => document.getElementById('chat-send-btn')?.click(), 100);
+      }
+    });
+  });
 }

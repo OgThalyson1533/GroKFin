@@ -9,6 +9,7 @@ import { uid }         from './utils/math.js';
 import { formatDateBR, addMonths } from './utils/date.js';
 
 // ── Helpers internos ──────────────────────────────────────────────────────────
+export const state = {};
 const LEGACY_STORAGE_KEY = 'grokfin_elite_v4_state';
 
 function addDays(date, n) {
