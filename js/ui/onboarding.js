@@ -1,116 +1,173 @@
+/**
+ * js/ui/onboarding.js — GrokFin Elite v6
+ * FEATURE: Tour de primeiro acesso premium (4 etapas).
+ * Disparado apenas quando state.isNewUser === true.
+ * Usa event delegation no overlay para máxima compatibilidade.
+ */
+
 import { state, saveState } from '../state.js';
-import { renderProfile } from './profile-ui.js';
 import { showToast } from '../utils/dom.js';
+
+// HTML de cada etapa (sem addEventListener inline — tudo via delegation)
+function stepHtml(step) {
+  if (step === 1) {
+    return `
+      <div id="ob-box" class="glass-panel max-w-md w-full rounded-[28px] p-8 text-center" style="animation:panelIn .35s ease both">
+        <div style="margin:0 auto 20px;width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#00f5ff,#00ff85);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#000;box-shadow:0 0 24px rgba(0,245,255,.3)">G</div>
+        <h2 style="font-size:22px;font-weight:900;color:#fff;margin-bottom:10px">Bem-vindo ao GrokFin Elite</h2>
+        <p style="font-size:14px;color:rgba(255,255,255,.6);margin-bottom:24px">Para personalizar sua experiência, como quer ser chamado?</p>
+        <input id="ob-name" type="text" placeholder="Seu nome"
+          style="width:100%;text-align:center;padding:13px 16px;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.07);color:#fff;font-size:15px;outline:none;margin-bottom:18px">
+        <button id="ob-next-1" style="width:100%;padding:14px;border-radius:20px;background:linear-gradient(135deg,#00f5ff,#00ff85);border:none;font-size:15px;font-weight:700;color:#000;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+          Começar →
+        </button>
+      </div>
+    `;
+  }
+  if (step === 2) {
+    return `
+      <div id="ob-box" class="glass-panel max-w-md w-full rounded-[28px] p-8" style="animation:panelIn .35s ease both">
+        <h2 style="font-size:20px;font-weight:900;color:#fff;margin-bottom:20px;text-align:center">Seus novos poderes</h2>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:28px">
+          <div style="display:flex;align-items:center;gap:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.05);padding:14px;border-radius:18px">
+            <i class="fa-solid fa-sparkles" style="font-size:22px;color:#a78bfa;width:32px;text-align:center"></i>
+            <p style="font-size:13px;color:rgba(255,255,255,.82)"><strong style="color:#fff">Inteligência:</strong> IA embutida lê caixa, metas e gera relatórios instantâneos.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.05);padding:14px;border-radius:18px">
+            <i class="fa-solid fa-bullseye" style="font-size:22px;color:#6ee7b7;width:32px;text-align:center"></i>
+            <p style="font-size:13px;color:rgba(255,255,255,.82)"><strong style="color:#fff">Estratégia:</strong> Foque na meta mais urgente e direcione cada centavo.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.05);padding:14px;border-radius:18px">
+            <i class="fa-solid fa-bolt" style="font-size:22px;color:#67e8f9;width:32px;text-align:center"></i>
+            <p style="font-size:13px;color:rgba(255,255,255,.82)"><strong style="color:#fff">Ação:</strong> Registre despesas com texto ou envie comprovantes pelo Chat.</p>
+          </div>
+        </div>
+        <button id="ob-next-2" style="width:100%;padding:14px;border-radius:20px;background:linear-gradient(135deg,#00f5ff,#00ff85);border:none;font-size:15px;font-weight:700;color:#000;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+          Próximo →
+        </button>
+      </div>
+    `;
+  }
+  if (step === 3) {
+    return `
+      <div id="ob-box" class="glass-panel max-w-md w-full rounded-[28px] p-8 text-center" style="animation:panelIn .35s ease both">
+        <h2 style="font-size:20px;font-weight:900;color:#fff;margin-bottom:10px">Primeiro passo</h2>
+        <p style="font-size:14px;color:rgba(255,255,255,.6);margin-bottom:24px">Dê vida ao dashboard. Registre seu primeiro movimento financeiro ou pule para explorar.</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button id="ob-tx-btn" style="width:100%;padding:13px;border-radius:18px;border:1px solid rgba(0,245,255,.3);background:rgba(0,245,255,.1);color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:background .18s" onmouseover="this.style.background='rgba(0,245,255,.18)'" onmouseout="this.style.background='rgba(0,245,255,.1)'">
+            <i class="fa-solid fa-plus" style="margin-right:8px"></i>Lançar Transação
+          </button>
+          <button id="ob-next-3" style="width:100%;padding:13px;border-radius:18px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:rgba(255,255,255,.65);font-size:14px;font-weight:600;cursor:pointer;transition:background .18s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
+            Pular →
+          </button>
+        </div>
+      </div>
+    `;
+  }
+  if (step === 4) {
+    return `
+      <div id="ob-box" class="glass-panel max-w-md w-full rounded-[28px] p-8 text-center" style="animation:panelIn .35s ease both">
+        <div style="margin:0 auto 20px;width:64px;height:64px;border-radius:50%;border:1px solid rgba(110,231,183,.25);background:rgba(110,231,183,.1);display:flex;align-items:center;justify-content:center">
+          <i class="fa-solid fa-check" style="font-size:26px;color:#6ee7b7"></i>
+        </div>
+        <h2 style="font-size:22px;font-weight:900;color:#fff;margin-bottom:10px">Tudo pronto.</h2>
+        <p style="font-size:14px;color:rgba(255,255,255,.6);margin-bottom:28px">Agora é a sua vez de assumir o controle total do seu fluxo financeiro.</p>
+        <button id="ob-finish" style="width:100%;padding:14px;border-radius:20px;background:linear-gradient(135deg,#00f5ff,#00ff85);border:none;font-size:15px;font-weight:700;color:#000;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+          Acessar Dashboard
+        </button>
+      </div>
+    `;
+  }
+  return '';
+}
 
 export function initOnboarding() {
   if (!state.isNewUser) return;
 
+  // Create full-screen overlay
   const overlay = document.createElement('div');
   overlay.id = 'onboarding-overlay';
-  overlay.className = 'fixed inset-0 z-[9999] bg-[#05171c]/90 flex items-center justify-center p-4 backdrop-blur-md';
+  Object.assign(overlay.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '9999',
+    background: 'rgba(5,23,28,.92)',
+    backdropFilter: 'blur(10px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px'
+  });
   document.body.appendChild(overlay);
 
   let step = 1;
 
-  function renderStep() {
-    overlay.innerHTML = '';
-    const box = document.createElement('div');
-    box.className = 'glass-panel max-w-md w-full rounded-[28px] p-8 text-center animate-[panelIn_.3s_ease]';
-
-    if (step === 1) {
-      box.innerHTML = `
-        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-cyan-300 to-emerald-300 text-3xl font-black text-black shadow-brand">G</div>
-        <h2 class="text-2xl font-black text-white">Bem-vindo ao Elite</h2>
-        <p class="mt-3 text-sm text-white/60 mb-6">Para personalizar sua experiência, como quer ser chamado?</p>
-        <input type="text" id="ob-name" class="w-full text-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-cyan-300/50 mb-6" placeholder="Seu nome" />
-        <button id="ob-next-1" class="w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 px-6 py-3.5 font-bold text-black shadow-brand transition-transform hover:scale-[1.02]">Começar</button>
-      `;
-      overlay.appendChild(box);
-      document.getElementById('ob-next-1').addEventListener('click', () => {
-        const name = document.getElementById('ob-name').value.trim();
-        if (name) {
-          state.profile.displayName = name;
-          state.profile.nickname = name.split(' ')[0];
-          saveState();
-          if (window.renderHeaderMeta) window.renderHeaderMeta();
-          renderProfile();
-        }
-        step = 2;
-        renderStep();
-      });
-    } else if (step === 2) {
-      box.innerHTML = `
-        <h2 class="text-xl font-black text-white mb-6">Seus novos poderes</h2>
-        <div class="space-y-4 mb-8 text-left text-sm text-white/80">
-          <div class="flex items-center gap-4 border border-white/8 bg-white/5 p-4 rounded-2xl">
-            <i class="fa-solid fa-sparkles text-2xl text-violet-300 w-8 text-center"></i>
-            <p><strong>Inteligência:</strong> IA embutida para ler caixa, metas e gerar relatórios instantâneos.</p>
-          </div>
-          <div class="flex items-center gap-4 border border-white/8 bg-white/5 p-4 rounded-2xl">
-            <i class="fa-solid fa-bullseye text-2xl text-emerald-300 w-8 text-center"></i>
-            <p><strong>Estratégia:</strong> Foque na sua meta mais urgente e direcione seu dinheiro.</p>
-          </div>
-          <div class="flex items-center gap-4 border border-white/8 bg-white/5 p-4 rounded-2xl">
-            <i class="fa-solid fa-bolt text-2xl text-cyan-300 w-8 text-center"></i>
-            <p><strong>Ação:</strong> Registre tudo diretamente no Chat com texto e recibos.</p>
-          </div>
-        </div>
-        <button id="ob-next-2" class="w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 px-6 py-3.5 font-bold text-black shadow-brand transition-transform hover:scale-[1.02]">Avançar</button>
-      `;
-      overlay.appendChild(box);
-      document.getElementById('ob-next-2').addEventListener('click', () => {
-        step = 3;
-        renderStep();
-      });
-    } else if (step === 3) {
-      box.innerHTML = `
-        <h2 class="text-xl font-black text-white mb-4">Primeiro passo</h2>
-        <p class="text-sm text-white/60 mb-6">Vamos dar vida ao seu dashboard. Registre seu primeiro movimento financeiro ou ajuste seu saldo.</p>
-        <div class="space-y-3">
-          <button id="ob-tx-btn" class="w-full rounded-2xl border border-cyan-300/30 bg-cyan-300/10 px-6 py-3.5 font-bold text-white transition-colors hover:bg-cyan-300/20">Lançar Transação</button>
-          <button id="ob-next-3" class="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-3.5 font-semibold text-white/70 transition-colors hover:bg-white/10">Pular passo</button>
-        </div>
-      `;
-      overlay.appendChild(box);
-      document.getElementById('ob-next-3').addEventListener('click', () => {
-        step = 4;
-        renderStep();
-      });
-      document.getElementById('ob-tx-btn').addEventListener('click', () => {
-        overlay.classList.add('hidden');
-        if (window.switchTab) window.switchTab(2); // Vai para Transações
-        if (window.openEditTx) window.openEditTx();
-        
-        // Fica checando se o modal fechou
-        const checkModal = setInterval(() => {
-          const mod = document.getElementById('tx-modal-overlay');
-          if (mod && mod.classList.contains('hidden')) {
-            clearInterval(checkModal);
-            overlay.classList.remove('hidden');
-            step = 4;
-            renderStep();
-          }
-        }, 500);
-      });
-    } else if (step === 4) {
-      box.innerHTML = `
-        <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-emerald-300">
-          <i class="fa-solid fa-check text-2xl"></i>
-        </div>
-        <h2 class="text-2xl font-black text-white">Tudo pronto</h2>
-        <p class="mt-3 text-sm text-white/60 mb-8">O plano está montado. Agora é sua vez de assumir o controle total do seu fluxo.</p>
-        <button id="ob-finish" class="w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 px-6 py-3.5 font-bold text-black shadow-brand transition-transform hover:scale-[1.02]">Acessar Dashboard</button>
-      `;
-      overlay.appendChild(box);
-      document.getElementById('ob-finish').addEventListener('click', () => {
-        state.isNewUser = false;
-        saveState();
-        overlay.remove();
-        if (window.switchTab) window.switchTab(0);
-        showToast('Sucesso. Bem-vindo ao GrokFin Elite!', 'success');
-      });
-    }
+  function render() {
+    overlay.innerHTML = stepHtml(step);
   }
 
-  renderStep();
+  // Use EVENT DELEGATION on the overlay — avoids timing issues with innerHTML
+  overlay.addEventListener('click', (e) => {
+    const id = e.target.closest('[id]')?.id;
+    if (!id) return;
+
+    if (id === 'ob-next-1') {
+      const nameVal = document.getElementById('ob-name')?.value?.trim() || '';
+      if (nameVal) {
+        state.profile = state.profile || {};
+        state.profile.displayName = nameVal;
+        state.profile.nickname = nameVal.split(' ')[0];
+        saveState();
+        if (window.renderHeaderMeta) window.renderHeaderMeta();
+        if (window.appRenderAll) window.appRenderAll();
+      }
+      step = 2;
+      render();
+    }
+
+    if (id === 'ob-next-2') {
+      step = 3;
+      render();
+    }
+
+    if (id === 'ob-tx-btn') {
+      overlay.style.display = 'none';
+      if (window.switchTab) window.switchTab(2);
+      // Retry finding modal open function since it might be async
+      let attempts = 0;
+      const tryOpen = setInterval(() => {
+        attempts++;
+        if (window.openEditTx) {
+          clearInterval(tryOpen);
+          window.openEditTx();
+          // Watch for modal close
+          const watchClose = setInterval(() => {
+            const mod = document.getElementById('tx-modal-overlay');
+            if (!mod || mod.classList.contains('hidden')) {
+              clearInterval(watchClose);
+              overlay.style.display = 'flex';
+              step = 4;
+              render();
+            }
+          }, 600);
+        }
+        if (attempts > 10) { clearInterval(tryOpen); overlay.style.display = 'flex'; step = 3; render(); }
+      }, 200);
+    }
+
+    if (id === 'ob-next-3') {
+      step = 4;
+      render();
+    }
+
+    if (id === 'ob-finish') {
+      state.isNewUser = false;
+      saveState();
+      overlay.remove();
+      if (window.switchTab) window.switchTab(0);
+      showToast('Bem-vindo ao GrokFin Elite!', 'success');
+    }
+  });
+
+  render();
 }
