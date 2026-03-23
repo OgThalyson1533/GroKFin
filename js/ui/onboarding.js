@@ -23,6 +23,7 @@ import { showToast } from '../utils/dom.js';
 import { parseCurrencyInput, formatMoney } from '../utils/format.js';
 import { uid } from '../utils/math.js';
 import { formatDateBR } from '../utils/date.js';
+import { syncToSupabase } from '../services/sync.js';
 
 // ─── CSS injetado dinamicamente ────────────────────────────────────────────────
 const OB_STYLES = `
@@ -577,6 +578,9 @@ export function initOnboarding() {
     if (id === 'ob-finish') {
       state.isNewUser = false;
       saveState();
+      
+      // Força sync imediato para garantir que o BD salve o profile e os saldos
+      syncToSupabase(state).catch(e => console.error('[Onboarding] Error syncing:', e));
 
       overlay.style.transition = 'opacity .4s ease';
       overlay.style.opacity = '0';

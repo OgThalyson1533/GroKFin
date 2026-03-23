@@ -9,6 +9,7 @@ import { toneForCategory, iconForCategory } from '../config.js';
 import { uid } from '../utils/math.js';
 import { parseDateBR } from '../utils/date.js';
 import { showToast, normalizeText } from '../utils/dom.js';
+import { deleteRemoteTransaction } from '../services/transactions.js';
 
 let _editingTxId = null;
 let _txToDelete = null;
@@ -370,10 +371,15 @@ export function exportTransactionsPDF() {
 export function deleteTx() {
   if (!_txToDelete) return;
   const oldVal = state.transactions.find(t => t.id === _txToDelete)?.value || 0;
+  
+  // Apaga do BD remoto silenciosamente
+  deleteRemoteTransaction(_txToDelete).catch(e => console.error('[UI] Deleção remota falhou', e));
+  
   state.transactions = state.transactions.filter(t => t.id !== _txToDelete);
   state.balance -= oldVal;
   _txToDelete = null;
   saveState();
+  
   document.getElementById('tx-delete-overlay')?.classList.add('hidden');
   renderTransactions();
   showToast('Transação excluída.', 'info');

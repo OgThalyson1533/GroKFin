@@ -50,7 +50,7 @@ export function syncLocationHash(index) {
 }
 
 export function switchTab(index, { force = false, skipHistory = false } = {}) {
-  const target = clamp(Number(index) || 0, 0, 8);
+  const target = clamp(Number(index) || 0, 0, 9);
   if (!force && state.ui.activeTab === target) return;
 
   state.ui.activeTab = target;
@@ -138,7 +138,7 @@ export function closeMaisSheet() {
 }
 
 export function bindNavigationEvents() {
-  document.querySelectorAll('.sidebar-link, .nav-rail-button').forEach(link => {
+  document.querySelectorAll('.sidebar-link, .nav-rail-button, .bottom-nav-button:not(#mais-btn)').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       switchTab(parseInt(link.dataset.tab));

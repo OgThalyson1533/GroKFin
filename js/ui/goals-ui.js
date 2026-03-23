@@ -193,41 +193,21 @@ export function renderGoals(analytics) {
     `;
 }
 
-export function createSmartGoal() {
-  const nameInput = document.getElementById('goal-input');
-  const targetInput = document.getElementById('goal-target');
-  const themeInput = document.getElementById('goal-theme');
-  const name = nameInput?.value.trim();
-
-  if (!name) {
-    nameInput?.focus();
-    showToast('Descreva a meta antes de gerar.', 'danger');
-    return;
-  }
-
-  const selectedTheme = themeInput?.value || 'auto';
-  const resolvedTheme = detectGoalTheme(name, selectedTheme);
-  const target = parseCurrencyInput(targetInput?.value);
-
-  const goal = {
-    id: uid('goal'),
-    nome: name,
-    atual: 0,
-    total: target || estimateGoalTarget(name, selectedTheme),
-    theme: resolvedTheme,
-    img: pickGoalImage(name, selectedTheme),
-    deadline: estimateGoalDeadline(name, selectedTheme)
-  };
-
-  state.goals.unshift(goal);
-  saveState();
+export function openAddGoal() {
+  _editingGoalId = null;
+  document.getElementById('goal-modal-title').textContent = 'Nova Meta';
+  document.getElementById('goal-modal-name').value = '';
+  document.getElementById('goal-modal-total').value = '';
+  document.getElementById('goal-modal-atual').value = '';
+  document.getElementById('goal-modal-theme').value = 'auto';
   
-  if (nameInput) nameInput.value = '';
-  if (targetInput) targetInput.value = '';
-  if (themeInput) themeInput.value = 'auto';
-  showToast(`Meta ${goal.nome} criada com tema ${getGoalThemeLabel(resolvedTheme).toLowerCase()}.`, 'success');
+  // Set default deadline to 1 year from now
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + 1);
+  document.getElementById('goal-modal-deadline').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   
-  if (window.appRenderAll) window.appRenderAll();
+  document.getElementById('goal-modal-error')?.classList.add('hidden');
+  document.getElementById('goal-modal-overlay')?.classList.remove('hidden');
 }
 
 export function applyGoalContribution(goalId, amount, options = {}) {
@@ -269,6 +249,7 @@ export function openEditGoal(id) {
   // [FIX #2] IDs corretos conforme o HTML: goal-modal-total e goal-modal-atual
   document.getElementById('goal-modal-total').value = goal.total.toFixed(2).replace('.', ',');
   document.getElementById('goal-modal-atual').value = goal.atual.toFixed(2).replace('.', ',');
+  document.getElementById('goal-modal-theme').value = goal.theme || 'auto';
   
   const d = new Date(goal.deadline);
   document.getElementById('goal-modal-deadline').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -306,20 +287,33 @@ export function deleteGoal() {
 
 export function saveGoalModal() {
   const name = document.getElementById('goal-modal-name').value.trim();
-  // [FIX #2] IDs corretos conforme o HTML
-  const target = parseCurrencyInput(document.getElementById('goal-modal-total').value);
+  const targetInputVal = document.getElementById('goal-modal-total').value;
+  let target = parseCurrencyInput(targetInputVal);
   const current = parseCurrencyInput(document.getElementById('goal-modal-atual').value) || 0;
   const deadlineStr = document.getElementById('goal-modal-deadline').value;
-  const customImg = '';
+  const themeInput = document.getElementById('goal-modal-theme').value;
   const errEl = document.getElementById('goal-modal-error');
 
-  if (!name || !target || !deadlineStr) {
-    errEl.textContent = 'Preencha nome, alvo e prazo.';
+  if (!name) {
+    errEl.textContent = 'Preencha o nome da meta.';
     errEl.classList.remove('hidden');
     return;
   }
 
-  const deadline = new Date(deadlineStr + 'T12:00:00Z').toISOString();
+  // Preenchimento inteligente se o alvo não foi informado ou for 0
+  const resolvedTheme = detectGoalTheme(name, themeInput);
+  if (!target) {
+     target = estimateGoalTarget(name, resolvedTheme);
+  }
+  
+  // Se ainda for inválido
+  if (!target) {
+     errEl.textContent = 'Preencha o valor alvo válido.';
+     errEl.classList.remove('hidden');
+     return;
+  }
+
+  let deadline = deadlineStr ? new Date(deadlineStr + 'T12:00:00Z').toISOString() : estimateGoalDeadline(name, resolvedTheme);
 
   if (_editingGoalId) {
     const idx = state.goals.findIndex(g => g.id === _editingGoalId);
@@ -335,17 +329,47 @@ export function saveGoalModal() {
       
       state.goals[idx] = { 
         ...g, nome: name, total: target, atual: current, deadline, 
-        customImage: customImg || undefined,
-        theme: detectGoalTheme(name, g.theme)
+        theme: resolvedTheme
       };
       
-      // se mudou imagem, recarrega a imagem padrão baseada no tema
-      if (!customImg) state.goals[idx].img = pickGoalImage(name, state.goals[idx].theme);
-      else state.goals[idx].img = customImg;
+      // Atualizar img se mudou o tema
+      state.goals[idx].img = pickGoalImage(name, themeInput);
       
       saveState();
       showToast('Meta atualizada com sucesso.', 'success');
     }
+  } else {
+    // Modo de criação de nova meta
+    const goal = {
+      id: uid('goal'),
+      nome: name,
+      atual: current,
+      total: target,
+      theme: resolvedTheme,
+      img: pickGoalImage(name, themeInput),
+      deadline: deadline
+    };
+    
+    // Se a meta já começar com saldo guardado
+    if (current > 0) {
+      if (state.balance < current) {
+        errEl.textContent = 'Saldo insuficiente para o valor inicial guardado.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      state.balance -= current;
+      state.transactions.unshift({
+        id: uid('tx'),
+        date: formatDateBR(new Date()),
+        desc: `Depósito inicial: ${name}`,
+        cat: 'Metas',
+        value: -current
+      });
+    }
+
+    state.goals.unshift(goal);
+    saveState();
+    showToast(`Meta "${name}" criada com sucesso.`, 'success');
   }
   
   document.getElementById('goal-modal-overlay')?.classList.add('hidden');
@@ -353,8 +377,8 @@ export function saveGoalModal() {
 }
 
 export function bindGoalEvents() {
-  // [FIX #8] HTML usa id='goal-create-btn', não 'goal-generate-btn'
-  document.getElementById('goal-create-btn')?.addEventListener('click', createSmartGoal);
+  // Bind Nova Meta button to open the modal
+  document.getElementById('goal-add-btn')?.addEventListener('click', openAddGoal);
   document.getElementById('goal-modal-cancel')?.addEventListener('click', () => document.getElementById('goal-modal-overlay')?.classList.add('hidden'));
   document.getElementById('goal-modal-close')?.addEventListener('click', () => document.getElementById('goal-modal-overlay')?.classList.add('hidden'));
   document.getElementById('goal-modal-save')?.addEventListener('click', saveGoalModal);

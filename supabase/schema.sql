@@ -47,6 +47,11 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   description TEXT NOT NULL,
   category TEXT NOT NULL,
   amount NUMERIC(12, 2) NOT NULL, -- Valores positivos para receita, negativos para despesa
+  payment TEXT,
+  card_id UUID,
+  recurring_template BOOLEAN DEFAULT FALSE,
+  installments INTEGER DEFAULT 1,
+  installment_current INTEGER DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -56,6 +61,7 @@ CREATE POLICY "Users can manage own transactions" ON public.transactions FOR ALL
 
 CREATE TRIGGER update_transactions_modtime
 BEFORE UPDATE ON public.transactions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 3. CARDS & INVOICES
@@ -205,8 +211,17 @@ CREATE TABLE IF NOT EXISTS public.exchange_rate_cache (
 --   CREATE POLICY "Users can insert own profile" ON public.profiles
 --     FOR INSERT WITH CHECK (auth.uid() = id);
 --
+--
 -- [FIX SQL #2] Adicionar updated_at + trigger em card_invoices (se não existir):
 --   ALTER TABLE public.card_invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 --   CREATE TRIGGER update_card_invoices_modtime
 --     BEFORE UPDATE ON public.card_invoices FOR EACH ROW
 --     EXECUTE FUNCTION update_updated_at_column();
+--
+-- [FIX SQL #3] Adicionar novos campos em transactions (se não existir):
+--   ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS payment TEXT;
+--   ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS card_id UUID;
+--   ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS recurring_template BOOLEAN DEFAULT FALSE;
+--   ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS installments INTEGER DEFAULT 1;
+--   ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS installment_current INTEGER DEFAULT 1;
+

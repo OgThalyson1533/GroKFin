@@ -44,7 +44,12 @@ export async function syncToSupabase(state) {
         date: toSqlDate(t.date),
         description: t.desc,
         category: t.cat,
-        amount: t.value
+        amount: t.value,
+        payment: t.payment,
+        card_id: t.cardId,
+        recurring_template: t.recurringTemplate,
+        installments: t.installments || 1,
+        installment_current: t.installmentCurrent || 1
       }));
       // Upsert batch
       const { error } = await supabase.from('transactions').upsert(txRows);
@@ -170,7 +175,12 @@ export async function syncFromSupabase(state) {
           date: `${day}/${month}/${year}`,
           desc: t.description,
           cat: t.category,
-          value: Number(t.amount)
+          value: Number(t.amount),
+          payment: t.payment,
+          cardId: t.card_id,
+          recurringTemplate: t.recurring_template,
+          installments: t.installments,
+          installmentCurrent: t.installment_current
         };
       });
     } else {

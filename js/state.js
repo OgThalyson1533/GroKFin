@@ -7,6 +7,7 @@
 import { STORAGE_KEY } from './config.js';
 import { uid }         from './utils/math.js';
 import { formatDateBR, addMonths } from './utils/date.js';
+import { syncToSupabase } from './services/sync.js';
 
 // ── Helpers internos ──────────────────────────────────────────────────────────
 export const state = {};
@@ -79,23 +80,6 @@ function createDefaultAvatarDataUrl(name = 'GrokFin User') {
 export function buildSeedState() {
   const today = new Date();
 
-  const transactions = [
-    { id: uid('tx'), date: formatDateBR(addDays(today, 0)),   desc: 'Extra Supermercado',   cat: 'Alimentação',   value: -142.30 },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -1)),  desc: 'Uber',                  cat: 'Transporte',    value: -28.50  },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -2)),  desc: 'Salário Nubank',         cat: 'Receita',       value: 5200.00 },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -3)),  desc: 'Amazon Prime Video',     cat: 'Assinaturas',   value: -19.90  },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -4)),  desc: 'XP Investimentos',       cat: 'Investimentos', value: -600.00 },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -5)),  desc: 'Farmácia Droga Raia',    cat: 'Saúde',         value: -86.40  },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -7)),  desc: 'iFood Express',           cat: 'Alimentação',   value: -68.20  },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -8)),  desc: 'Conta de Luz',            cat: 'Moradia',       value: -188.70 },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -9)),  desc: 'Shopping Morumbi',        cat: 'Lazer',         value: -430.50 },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -11)), desc: 'Freelance Produto',       cat: 'Receita',       value: 1800.00 },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -12)), desc: 'Posto Ipiranga',          cat: 'Transporte',    value: -240.00 },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -15)), desc: 'Aluguel',                 cat: 'Moradia',       value: -2200.00},
-    { id: uid('tx'), date: formatDateBR(addDays(today, -17)), desc: 'Tesouro Direto',          cat: 'Investimentos', value: -500.00 },
-    { id: uid('tx'), date: formatDateBR(addDays(today, -19)), desc: 'Bar do Alemão',           cat: 'Lazer',         value: -126.00 }
-  ];
-
   return {
     isNewUser: true,
     balance: 0,
@@ -109,9 +93,9 @@ export function buildSeedState() {
     investments: [],
     fixedExpenses: [],
     budgets: {
-      'Moradia': 2600, 'Alimentação': 1200, 'Transporte': 650,
-      'Lazer': 800,    'Investimentos': 1300,'Assinaturas': 120,
-      'Saúde': 450,    'Metas': 1600
+      'Moradia': 0, 'Alimentação': 0, 'Transporte': 0,
+      'Lazer': 0,    'Investimentos': 0,'Assinaturas': 0,
+      'Saúde': 0,    'Metas': 0
     },
     goals: [],
     profile: {
@@ -183,6 +167,8 @@ export function loadState() {
 
 // ── saveState ─────────────────────────────────────────────────────────────────
 
+let _syncTimeout = null;
+
 // [FIX #2] Removido parâmetro `state` da assinatura. Todos os callers chamavam
 // saveState() sem argumento, fazendo o parâmetro chegar como `undefined` e nunca
 // persistindo nada no localStorage. Agora usa o `state` exportado deste módulo
@@ -191,6 +177,14 @@ export function saveState() {
   try {
     const toSave = { ...state, chatHistory: (state.chatHistory || []).slice(-40) };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    
+    // Background sync para o Supabase (Debounced)
+    if (!state.isNewUser) {
+      clearTimeout(_syncTimeout);
+      _syncTimeout = setTimeout(() => {
+        syncToSupabase(state).catch(e => console.error('[Sync] Falha auto-sync:', e));
+      }, 2500);
+    }
   } catch {
     // localStorage cheio — tenta versão slim sem imagens e chat
     try {
