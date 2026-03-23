@@ -54,7 +54,7 @@
         </div>
         <p class="mt-3 text-center text-[10px] font-semibold uppercase tracking-[.28em] text-cyan-200/55">Wealth OS</p>
 
-        <nav class="mt-8 space-y-3">
+        <nav class="mt-6 flex-1 overflow-y-auto space-y-1.5 scrollbar-hide pb-4">
           <button data-tab="0" class="nav-rail-button active" aria-label="Home">
             <span class="nav-rail-icon"><i class="fa-solid fa-house"></i></span>
             <span class="nav-rail-tooltip">Home</span>
@@ -91,6 +91,10 @@
             <span class="nav-rail-icon"><i class="fa-solid fa-chart-line"></i></span>
             <span class="nav-rail-tooltip">Investimentos</span>
           </button>
+          <button data-tab="9" class="nav-rail-button" aria-label="Mercado">
+            <span class="nav-rail-icon"><i class="fa-solid fa-globe"></i></span>
+            <span class="nav-rail-tooltip">Mercado</span>
+          </button>
         </nav>
       </div>
 
@@ -98,10 +102,6 @@
         <div class="rounded-[26px] border border-white/8 bg-white/5 p-3 text-center">
           <img data-profile-image="avatar" alt="Avatar" class="mx-auto h-14 w-14 rounded-2xl border border-white/10 object-cover">
           <div class="mt-3 space-y-2">
-            <div class="rounded-2xl border border-white/8 bg-black/20 p-2">
-              <p class="text-[9px] uppercase tracking-[.24em] text-white/30">Sync</p>
-              <p id="sidebar-last-update" class="mt-1 text-[11px] font-semibold text-white/82">--:--</p>
-            </div>
             <div class="rounded-2xl border border-white/8 bg-black/20 p-2">
               <p class="text-[9px] uppercase tracking-[.24em] text-white/30">Score</p>
               <p id="sidebar-score" class="mt-1 text-[11px] font-semibold text-cyan-200">--</p>
@@ -677,6 +677,9 @@
       <button id="profile-save-btn" class="hidden rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 px-6 py-3.5 font-bold text-black shadow-brand transition-transform hover:scale-[1.02]">
         <i class="fa-solid fa-floppy-disk mr-2"></i>Salvar perfil
       </button>
+      <button id="profile-logout-btn" class="pill hover:border-rose-400/30 hover:bg-rose-400/8 transition-colors text-white/70">
+        <i class="fa-solid fa-arrow-right-from-bracket text-rose-400"></i> Sair
+      </button>
     </div>
   </div>
 
@@ -1005,6 +1008,35 @@
           </div>
         </div>
 
+        <!-- ═══════════════════════════ TAB 9: MERCADO & DISCOVER ═══════════════════════════ -->
+        <div id="tab-9" class="tab-panel space-y-8">
+          <div class="flex flex-col gap-4">
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[.24em] text-cyan-200/55">Mercado Global</p>
+              <h3 class="mt-2 text-4xl font-black tracking-tight text-white">Cotações e Tendências</h3>
+              <p class="mt-3 max-w-2xl text-white/55">Criptoativos e moedas estrangeiras atualizados em tempo real.</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4 lg:grid-cols-4" id="market-tickers">
+             <!-- Tickers carregados via market.js -->
+             <p class="text-xs text-white/40 italic">Aguardando dados...</p>
+          </div>
+          <div class="grid gap-5 xl:grid-cols-[1fr_1fr]">
+            <div class="glass-panel rounded-[28px] p-6">
+              <p class="text-sm font-semibold text-white mb-4">Cripto em destaque (Top 4)</p>
+              <div id="market-trending-crypto" class="space-y-3">
+                 <p class="text-xs text-white/40 italic">Carregando tendências...</p>
+              </div>
+            </div>
+            <div class="glass-panel rounded-[28px] p-6">
+              <p class="text-sm font-semibold text-white mb-4">Moedas Fiat</p>
+              <div id="market-trending-fiat" class="space-y-3">
+                 <p class="text-xs text-white/40 italic">Carregando cotações fiat...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </section>
     </main>
 
@@ -1023,24 +1055,30 @@
           <i class="fa-solid fa-xmark text-xs"></i>
         </button>
       </div>
-      <div class="grid grid-cols-3 gap-3 px-5 pb-8">
-        <button data-tab="6" onclick="event.stopPropagation();closeMaisSheet();switchTab(6)" class="mais-tab-btn flex flex-col items-center gap-2.5 rounded-[20px] border border-white/8 bg-white/5 py-5 transition-all active:scale-95" style="backdrop-filter:blur(12px)">
+      <div class="grid grid-cols-4 gap-3 px-5 pb-8">
+        <button data-tab="6" onclick="event.stopPropagation();closeMaisSheet();switchTab(6)" class="mais-tab-btn flex flex-col items-center gap-2.5 rounded-[20px] border border-white/8 bg-white/5 py-4 transition-all active:scale-95" style="backdrop-filter:blur(12px)">
           <span class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/8">
             <i class="fa-solid fa-credit-card text-cyan-300"></i>
           </span>
-          <span class="text-xs font-bold text-white/80 tracking-wide">Cartões</span>
+          <span class="text-[10px] font-bold text-white/80 tracking-wide uppercase">Cartões</span>
         </button>
-        <button data-tab="7" onclick="event.stopPropagation();closeMaisSheet();switchTab(7)" class="mais-tab-btn flex flex-col items-center gap-2.5 rounded-[20px] border border-white/8 bg-white/5 py-5 transition-all active:scale-95" style="backdrop-filter:blur(12px)">
+        <button data-tab="7" onclick="event.stopPropagation();closeMaisSheet();switchTab(7)" class="mais-tab-btn flex flex-col items-center gap-2.5 rounded-[20px] border border-white/8 bg-white/5 py-4 transition-all active:scale-95" style="backdrop-filter:blur(12px)">
           <span class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/8">
             <i class="fa-solid fa-calendar-check text-violet-300"></i>
           </span>
-          <span class="text-xs font-bold text-white/80 tracking-wide">Fluxo</span>
+          <span class="text-[10px] font-bold text-white/80 tracking-wide uppercase">Fluxo</span>
         </button>
-        <button data-tab="8" onclick="event.stopPropagation();closeMaisSheet();switchTab(8)" class="mais-tab-btn flex flex-col items-center gap-2.5 rounded-[20px] border border-white/8 bg-white/5 py-5 transition-all active:scale-95" style="backdrop-filter:blur(12px)">
+        <button data-tab="8" onclick="event.stopPropagation();closeMaisSheet();switchTab(8)" class="mais-tab-btn flex flex-col items-center gap-2.5 rounded-[20px] border border-white/8 bg-white/5 py-4 transition-all active:scale-95" style="backdrop-filter:blur(12px)">
           <span class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/8">
             <i class="fa-solid fa-chart-line text-emerald-300"></i>
           </span>
-          <span class="text-xs font-bold text-white/80 tracking-wide">Invest.</span>
+          <span class="text-[10px] font-bold text-white/80 tracking-wide uppercase">Invest.</span>
+        </button>
+        <button data-tab="9" onclick="event.stopPropagation();closeMaisSheet();switchTab(9)" class="mais-tab-btn flex flex-col items-center gap-2.5 rounded-[20px] border border-white/8 bg-white/5 py-4 transition-all active:scale-95" style="backdrop-filter:blur(12px)">
+          <span class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/8">
+            <i class="fa-solid fa-globe text-fuchsia-300"></i>
+          </span>
+          <span class="text-[10px] font-bold text-white/80 tracking-wide uppercase">Mercado</span>
         </button>
       </div>
     </div>

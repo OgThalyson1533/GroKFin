@@ -87,54 +87,71 @@ export function renderCharts(analytics) {
   gradient.addColorStop(0, 'rgba(0,255,133,.35)');
   gradient.addColorStop(1, 'rgba(0,255,133,0)');
 
-  charts.line = new Chart(lineCanvas, {
-    type: 'line',
-    data: {
-      labels: analytics.projection.map(item => item.label),
-      datasets: [{
-        data: analytics.projection.map(item => item.value),
-        borderColor: '#00ff85',
-        backgroundColor: gradient,
-        borderWidth: 3,
-        fill: true,
-        tension: .35,
-        pointRadius: 3.5,
-        pointHoverRadius: 6,
-        pointBorderWidth: 2,
-        pointBackgroundColor: '#0d131f',
-        pointBorderColor: '#00ff85'
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          grid: { color: 'rgba(255,255,255,.06)' },
-          border: { display: false },
-          ticks: {
-            callback(value) { return formatMoneyShort(value); }
+  if (state.transactions.length === 0) {
+    lineCanvas.style.display = 'none';
+    const parent = lineCanvas.parentElement;
+    let msg = parent.querySelector('.no-data-msg');
+    if (!msg) {
+      msg = document.createElement('div');
+      msg.className = 'no-data-msg absolute inset-0 flex items-center justify-center text-sm text-white/40 italic';
+      msg.textContent = 'Adicione transações para ver sua projeção futura.';
+      parent.appendChild(msg);
+    }
+    msg.style.display = 'flex';
+  } else {
+    lineCanvas.style.display = 'block';
+    const msg = lineCanvas.parentElement.querySelector('.no-data-msg');
+    if (msg) msg.style.display = 'none';
+
+    charts.line = new Chart(lineCanvas, {
+      type: 'line',
+      data: {
+        labels: analytics.projection.map(item => item.label),
+        datasets: [{
+          data: analytics.projection.map(item => item.value),
+          borderColor: '#00ff85',
+          backgroundColor: gradient,
+          borderWidth: 3,
+          fill: true,
+          tension: .35,
+          pointRadius: 3.5,
+          pointHoverRadius: 6,
+          pointBorderWidth: 2,
+          pointBackgroundColor: '#0d131f',
+          pointBorderColor: '#00ff85'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            grid: { color: 'rgba(255,255,255,.06)' },
+            border: { display: false },
+            ticks: {
+              callback(value) { return formatMoneyShort(value); }
+            }
+          },
+          x: {
+            grid: { display: false },
+            border: { display: false }
           }
         },
-        x: {
-          grid: { display: false },
-          border: { display: false }
-        }
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          mode: 'index',
-          intersect: false,
-          callbacks: {
-            label(context) {
-              return `Patrimônio projetado: ${formatMoney(context.parsed.y)}`;
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              label(context) {
+                return `Patrimônio projetado: ${formatMoney(context.parsed.y)}`;
+              }
             }
           }
         }
       }
-    }
-  });
+    });
+  }
 
   // ── Monthly income vs expense chart ──
   const monthlyCanvas = document.getElementById('monthlyFlowChart');
@@ -148,65 +165,82 @@ export function renderCharts(analytics) {
     gradExpense.addColorStop(0, 'rgba(255,102,133,.25)');
     gradExpense.addColorStop(1, 'rgba(255,102,133,0)');
 
-    charts.monthly = new Chart(monthlyCanvas, {
-      type: 'line',
-      data: {
-        labels: mData.map(d => d.label),
-        datasets: [
-          {
-            label: 'Receita',
-            data: mData.map(d => d.income),
-            borderColor: '#00ff85',
-            backgroundColor: gradIncome,
-            borderWidth: 2.5, fill: true, tension: .35,
-            pointRadius: 4, pointHoverRadius: 7,
-            pointBackgroundColor: '#0d131f', pointBorderColor: '#00ff85', pointBorderWidth: 2
-          },
-          {
-            label: 'Despesas',
-            data: mData.map(d => d.expense),
-            borderColor: '#ff6685',
-            backgroundColor: gradExpense,
-            borderWidth: 2.5, fill: true, tension: .35,
-            pointRadius: 4, pointHoverRadius: 7,
-            pointBackgroundColor: '#0d131f', pointBorderColor: '#ff6685', pointBorderWidth: 2
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        scales: {
-          y: {
-            grid: { color: 'rgba(255,255,255,.05)' },
-            border: { display: false },
-            ticks: { color: 'rgba(255,255,255,.45)', callback: v => formatMoneyShort(v), font: { size: 11 } }
-          },
-          x: {
-            grid: { display: false },
-            border: { display: false },
-            ticks: { color: 'rgba(255,255,255,.45)', font: { size: 11 } }
-          }
+    if (state.transactions.length === 0) {
+      monthlyCanvas.style.display = 'none';
+      const parent = monthlyCanvas.parentElement;
+      let msg = parent.querySelector('.no-data-msg');
+      if (!msg) {
+        msg = document.createElement('div');
+        msg.className = 'no-data-msg absolute inset-0 flex items-center justify-center text-sm text-white/40 italic';
+        msg.textContent = 'Adicione transações para compor o fluxo dos meses passados.';
+        parent.appendChild(msg);
+      }
+      msg.style.display = 'flex';
+    } else {
+      monthlyCanvas.style.display = 'block';
+      const msg = monthlyCanvas.parentElement.querySelector('.no-data-msg');
+      if (msg) msg.style.display = 'none';
+      
+      charts.monthly = new Chart(monthlyCanvas, {
+        type: 'line',
+        data: {
+          labels: mData.map(d => d.label),
+          datasets: [
+            {
+              label: 'Receita',
+              data: mData.map(d => d.income),
+              borderColor: '#00ff85',
+              backgroundColor: gradIncome,
+              borderWidth: 2.5, fill: true, tension: .35,
+              pointRadius: 4, pointHoverRadius: 7,
+              pointBackgroundColor: '#0d131f', pointBorderColor: '#00ff85', pointBorderWidth: 2
+            },
+            {
+              label: 'Despesas',
+              data: mData.map(d => d.expense),
+              borderColor: '#ff6685',
+              backgroundColor: gradExpense,
+              borderWidth: 2.5, fill: true, tension: .35,
+              pointRadius: 4, pointHoverRadius: 7,
+              pointBackgroundColor: '#0d131f', pointBorderColor: '#ff6685', pointBorderWidth: 2
+            }
+          ]
         },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}`,
-              afterBody: (items) => {
-                if (items.length >= 2) {
-                  const inc = items.find(i => i.datasetIndex === 0)?.parsed.y || 0;
-                  const exp = items.find(i => i.datasetIndex === 1)?.parsed.y || 0;
-                  const net = inc - exp;
-                  return [`Saldo: ${net >= 0 ? '+' : ''}${formatMoney(net)}`];
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            y: {
+              grid: { color: 'rgba(255,255,255,.05)' },
+              border: { display: false },
+              ticks: { color: 'rgba(255,255,255,.45)', callback: v => formatMoneyShort(v), font: { size: 11 } }
+            },
+            x: {
+              grid: { display: false },
+              border: { display: false },
+              ticks: { color: 'rgba(255,255,255,.45)', font: { size: 11 } }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}`,
+                afterBody: (items) => {
+                  if (items.length >= 2) {
+                    const inc = items.find(i => i.datasetIndex === 0)?.parsed.y || 0;
+                    const exp = items.find(i => i.datasetIndex === 1)?.parsed.y || 0;
+                    const net = inc - exp;
+                    return [`Saldo: ${net >= 0 ? '+' : ''}${formatMoney(net)}`];
+                  }
+                  return [];
                 }
-                return [];
               }
             }
           }
         }
-      }
-    });
+      });
+    }
   }
 }

@@ -6,6 +6,7 @@
 import { loadState, saveState, state } from './state.js';
 import { initAuth } from './services/auth.js';
 import { isSupabaseConfigured } from './services/supabase.js';
+import { syncFromSupabase } from './services/sync.js';
 import { bindNavigationEvents, syncLocationHash, syncActiveViewLabel, switchTab } from './ui/navigation.js';
 import { bindDashboardEvents, renderDashboard, renderHeaderMeta, renderReport } from './ui/dashboard-ui.js';
 import { renderCharts } from './ui/charts.js';
@@ -57,6 +58,14 @@ async function initApp() {
   // 1. Carrega dados do localStorage ou gera banco inicial
   const loadedState = loadState();
   Object.assign(state, loadedState);
+
+  // 1.2 Resgata da nuvem e mescla/sobrescreve o local (multi-device)
+  if (isSupabaseConfigured && user) {
+    const success = await syncFromSupabase(state);
+    if (success) {
+      saveState();
+    }
+  }
 
   // 1.5 Roda o Cron-Job Local de Recorrências Fixas
   const cronDidChanges = processRecurrences(state);

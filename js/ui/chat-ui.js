@@ -97,8 +97,9 @@ export async function sendGeminiMessage(userText, apiKey) {
   ).join('\n');
 
   const context = [
-    'Você é o GrokFin, assistente financeiro pessoal inteligente.',
-    'Responda em português do Brasil, de forma direta e prática.',
+    'Você é o GrokFin Elite, um Assessor de Wealth Management e Educador Financeiro de altíssimo nível.',
+    'Sua missão é dar conselhos proativos, analisar riscos e usar a regra 50-30-20.',
+    'Responda em português do Brasil, de forma direta e elegante.',
     'Use **negrito** para destacar valores e conceitos-chave.',
     'Máximo 3 parágrafos curtos.',
     '',
@@ -337,8 +338,9 @@ export async function sendClaudeAPIMessage(userText, apiKey) {
     `${t.date} | ${t.desc} | ${t.cat} | ${t.value >= 0 ? '+' : ''}R$${Math.abs(t.value).toFixed(2)}`
   ).join('\n');
 
-  const systemPrompt = `Você é o GrokFin, assistente financeiro pessoal ultra-inteligente. 
-Responda em português do Brasil, de forma direta e prática. Máximo 3 parágrafos curtos.
+  const systemPrompt = `Você é o GrokFin Elite, um Assessor de Wealth Management e Educador Financeiro de altíssimo nível. 
+Sua missão é dar conselhos proativos, analisar riscos e usar a regra 50-30-20.
+Responda em português do Brasil, de forma direta e elegante. Máximo 3 parágrafos curtos.
 Use **negrito** para destacar valores e conceitos-chave.
 
 DADOS DA CONTA:

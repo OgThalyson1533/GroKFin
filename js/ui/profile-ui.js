@@ -7,6 +7,7 @@ import { state, saveState } from '../state.js';
 import { formatMoney } from '../utils/format.js';
 import { calculateAnalytics } from '../analytics/engine.js';
 import { showToast } from '../utils/dom.js';
+import { signOut } from '../services/auth.js';
 
 export const profileEditor = { isEditing: false, draft: null };
 
@@ -253,6 +254,11 @@ export function bindProfileEvents() {
   document.getElementById('profile-edit-toggle-btn')?.addEventListener('click', () => {
     if (profileEditor.isEditing) cancelProfileEditing();
     else startProfileEditing();
+  });
+
+  document.getElementById('profile-logout-btn')?.addEventListener('click', async () => {
+    await signOut();
+    window.location.replace('./index.html');
   });
 
   document.getElementById('profile-save-btn')?.addEventListener('click', saveProfileDraft);

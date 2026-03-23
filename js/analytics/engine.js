@@ -146,15 +146,33 @@ export function calculateAnalytics(state) {
 
   const expenseTrend = previousExpense > 0 ? ((recentExpense - previousExpense) / previousExpense) * 100 : 0;
 
-  // 12-month forward projection (simple linear)
-  const baselineNet = net || Math.max(incomes * 0.18, 850);
+  // 12-month forward projection (Predictive Algorithmic)
+  const fixedMonthlyOut = (state.fixedExpenses || []).filter(e => !e.isIncome && e.active !== false).reduce((a, e) => a + Math.abs(e.value), 0);
+  const fixedMonthlyIn = (state.fixedExpenses || []).filter(e => e.isIncome && e.active !== false).reduce((a, e) => a + Number(e.value), 0);
+  
+  const floatingExpenses = Math.max(0, expenses - fixedMonthlyOut);
+  const baseMonthlyIncomes = incomes > 0 ? incomes : fixedMonthlyIn;
+  const predictiveNet = baseMonthlyIncomes - (fixedMonthlyOut + floatingExpenses);
+  
+  const monthlyPace = predictiveNet !== 0 ? predictiveNet : net;
+  
   const projection  = [];
   let simulated     = state.balance;
 
   for (let i = 0; i < 12; i++) {
-    simulated += baselineNet;
+    let monthlyFlow = monthlyPace;
+    const futureDate = addMonths(ref, i + 1);
+    const monthIndex = futureDate.getMonth();
+    
+    // Simulação Preditiva de Sazonalidade Avançada
+    // Ajuste de IPVA / IPTU em Janeiro (Mês 0)
+    if (monthIndex === 0) monthlyFlow -= Math.max(500, baseMonthlyIncomes * 0.15); 
+    // Décimo Terceiro / Bônus em Dezembro (Mês 11)
+    if (monthIndex === 11) monthlyFlow += (baseMonthlyIncomes * 0.7);
+
+    simulated += monthlyFlow;
     projection.push({
-      label: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(addMonths(ref, i + 1)),
+      label: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(futureDate),
       value: Math.round(simulated)
     });
   }
@@ -223,13 +241,52 @@ export function buildPrimaryInsight(analytics, state) {
 export function buildSmartInsights(analytics, state) {
   const insights = [];
 
+  // ── AI Coaching (Regra 50-30-20) ──
+  if (analytics.incomes > 0) {
+    const wantsCats = ['Lazer', 'Assinaturas'];
+    const needsCats = ['Moradia', 'Alimentação', 'Saúde', 'Transporte', 'Rotina'];
+    
+    let wantsTotal = 0;
+    let needsTotal = 0;
+    analytics.categories.forEach(([cat, val]) => {
+      if (wantsCats.includes(cat)) wantsTotal += val;
+      if (needsCats.includes(cat)) needsTotal += val;
+    });
+
+    const wantsPct = (wantsTotal / analytics.incomes) * 100;
+    const needsPct = (needsTotal / analytics.incomes) * 100;
+
+    if (wantsPct > 30) {
+      insights.push({
+        type: 'alert', icon: '🎭',
+        title: 'Regra 50-30-20: Cuidado com o Lazer',
+        text: `Seus gastos não-essenciais estão em ${formatPercent(wantsPct, 0)} da renda (ideal ≤ 30%). Reduza custos com assinaturas ou saídas.`
+      });
+    } else if (wantsPct > 0 && wantsPct <= 30 && analytics.savingRate >= 20) {
+      insights.push({
+        type: 'positive', icon: '⚖️',
+        title: 'Equilíbrio Perfeito',
+        text: 'Você está respeitando a regra 50-30-20. O lazer e os investimentos estão em harmonia!'
+      });
+    }
+
+    if (needsPct > 55) {
+      insights.push({
+        type: 'tip', icon: '🏠',
+        title: 'Custo Fixo Elevado',
+        text: `Seus gastos essenciais consomem ${formatPercent(needsPct, 0)} da renda (ideal ≤ 50%). Considere rever hábitos de consumo básicos.`
+      });
+    }
+  }
+
+  // ── Outros Alertas Dinâmicos ──
   if (analytics.overspend) {
     const excess = Math.max(0, analytics.overspend.value - analytics.overspend.limit);
     insights.push({
       type:  'alert',
       icon:  '⚠️',
-      title: `${analytics.overspend.cat} acima do orçamento`,
-      text:  `Gasto de ${formatMoney(analytics.overspend.value)} vs limite de ${formatMoney(analytics.overspend.limit)}. Excedente: ${formatMoney(excess)}.`
+      title: `${analytics.overspend.cat} estourou`,
+      text:  `Gasto ultrapassou o orçamento em ${formatMoney(excess)}.`
     });
   }
 
