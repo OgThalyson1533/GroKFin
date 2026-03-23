@@ -247,13 +247,14 @@ export function openEditGoal(id) {
   
   document.getElementById('goal-modal-title').textContent = 'Editar Meta';
   document.getElementById('goal-modal-name').value = goal.nome;
-  document.getElementById('goal-modal-target').value = goal.total.toFixed(2).replace('.', ',');
-  document.getElementById('goal-modal-current').value = goal.atual.toFixed(2).replace('.', ',');
+  // [FIX #2] IDs corretos conforme o HTML: goal-modal-total e goal-modal-atual
+  document.getElementById('goal-modal-total').value = goal.total.toFixed(2).replace('.', ',');
+  document.getElementById('goal-modal-atual').value = goal.atual.toFixed(2).replace('.', ',');
   
   const d = new Date(goal.deadline);
   document.getElementById('goal-modal-deadline').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   
-  document.getElementById('goal-modal-customimg').value = goal.customImage || '';
+  // Sem campo customimg no HTML — ignorado
   document.getElementById('goal-modal-error')?.classList.add('hidden');
   document.getElementById('goal-modal-overlay')?.classList.remove('hidden');
 }
@@ -286,10 +287,11 @@ export function deleteGoal() {
 
 export function saveGoalModal() {
   const name = document.getElementById('goal-modal-name').value.trim();
-  const target = parseCurrencyInput(document.getElementById('goal-modal-target').value);
-  const current = parseCurrencyInput(document.getElementById('goal-modal-current').value) || 0;
+  // [FIX #2] IDs corretos conforme o HTML
+  const target = parseCurrencyInput(document.getElementById('goal-modal-total').value);
+  const current = parseCurrencyInput(document.getElementById('goal-modal-atual').value) || 0;
   const deadlineStr = document.getElementById('goal-modal-deadline').value;
-  const customImg = document.getElementById('goal-modal-customimg').value.trim();
+  const customImg = '';
   const errEl = document.getElementById('goal-modal-error');
 
   if (!name || !target || !deadlineStr) {
@@ -332,7 +334,8 @@ export function saveGoalModal() {
 }
 
 export function bindGoalEvents() {
-  document.getElementById('goal-generate-btn')?.addEventListener('click', createSmartGoal);
+  // [FIX #8] HTML usa id='goal-create-btn', não 'goal-generate-btn'
+  document.getElementById('goal-create-btn')?.addEventListener('click', createSmartGoal);
   document.getElementById('goal-modal-cancel')?.addEventListener('click', () => document.getElementById('goal-modal-overlay')?.classList.add('hidden'));
   document.getElementById('goal-modal-close')?.addEventListener('click', () => document.getElementById('goal-modal-overlay')?.classList.add('hidden'));
   document.getElementById('goal-modal-save')?.addEventListener('click', saveGoalModal);

@@ -563,8 +563,14 @@
 <i class="fa-solid fa-paperclip"></i>
 <input accept="image/*" class="hidden" id="file-upload" type="file"/>
 </label>
+<!-- [FIX #5] Botão de microfone para transcrição de áudio -->
+<button id="chat-mic-btn" title="Gravar áudio — clique para falar"
+  class="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg text-white/70 transition-all hover:bg-white/10 hover:text-cyan-300"
+  style="flex-shrink:0">
+  <i class="fa-solid fa-microphone" id="chat-mic-icon"></i>
+</button>
 <div class="flex h-14 min-w-[240px] flex-1 items-center rounded-2xl border border-white/10 bg-white/5 px-5 focus-within:border-cyan-300/40">
-<input class="w-full bg-transparent outline-none placeholder:text-white/28" id="chat-input" placeholder="Pergunte algo sobre fluxo, metas, câmbio ou economia..." type="text"/>
+<input class="w-full bg-transparent outline-none placeholder:text-white/28" id="chat-input" placeholder="Pergunte algo sobre fluxo, metas, câmbio ou fale com o microfone..." type="text"/>
 </div>
 <button class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 text-lg text-black shadow-brand transition-transform hover:scale-105" id="chat-send-btn">
 <i class="fa-solid fa-paper-plane"></i>
@@ -1159,6 +1165,13 @@
             <input type="checkbox" id="tx-modal-recurring" class="sr-only peer">
             <div class="w-11 h-6 rounded-full border border-white/15 bg-white/10 peer-checked:bg-gradient-to-r peer-checked:from-violet-500 peer-checked:to-cyan-500 transition-all after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:bg-white after:rounded-full after:transition-all peer-checked:after:translate-x-5"></div>
           </label>
+        </div>
+        <!-- [FIX #3] Campo de parcelas adicionado (existia no JS mas não no HTML) -->
+        <div class="flex flex-col gap-1" id="tx-split-section">
+          <label class="text-xs font-semibold uppercase tracking-widest text-white/40">Parcelas (opcional)</label>
+          <input id="tx-modal-split" type="number" min="1" max="24" placeholder="1 = à vista"
+                 class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/50 focus:bg-white/8 transition-colors placeholder:text-white/25"/>
+          <p class="text-xs text-white/35 px-1"><i class="fa-solid fa-circle-info mr-1"></i>Para compras parceladas no cartão de crédito.</p>
         </div>
         <!-- Error message -->
         <p id="tx-modal-error" class="hidden text-xs text-rose-400 font-semibold px-1"></p>

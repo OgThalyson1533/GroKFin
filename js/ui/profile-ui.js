@@ -38,17 +38,24 @@ export function applyProfileBindings(profile) {
     else el.textContent = profile.bio;
   });
 
-  // Somente a UI sabe criar a dataUrl default baseada em SVG,
-  // ou poderíamos exportar criar createDefaultAvatarDataUrl no utils, 
-  // mas aqui simplificaremos verificando se tem a imagem salva.
+  // [FIX #1] O HTML usa data-profile-text / data-profile-image / data-profile-bg
+  // em vez de data-bind. Suporte duplo para cobrir os dois padrões:
+  document.querySelectorAll('[data-profile-text="displayName"]').forEach(el => { el.textContent = profile.displayName; });
+  document.querySelectorAll('[data-profile-text="nickname"]').forEach(el => { el.textContent = profile.nickname; });
+  document.querySelectorAll('[data-profile-text="handle"]').forEach(el => { el.textContent = profile.handle; });
+
   const avatarUrl = profile.avatarImage || (window.createDefaultAvatarDataUrl ? window.createDefaultAvatarDataUrl(profile.displayName) : '');
   const bannerUrl = profile.bannerImage || (window.createDefaultBannerDataUrl ? window.createDefaultBannerDataUrl() : '');
 
-  document.querySelectorAll('[data-bind="profile.avatarImage"]').forEach(img => {
-    img.src = avatarUrl;
+  document.querySelectorAll('[data-bind="profile.avatarImage"], [data-profile-image="avatar"]').forEach(img => {
+    if (avatarUrl) img.src = avatarUrl;
   });
   document.querySelectorAll('[data-bind="profile.bannerImage"]').forEach(img => {
-    img.src = bannerUrl;
+    if (bannerUrl) img.src = bannerUrl;
+  });
+  // Banner via background CSS
+  document.querySelectorAll('[data-profile-bg="banner"]').forEach(el => {
+    if (bannerUrl) el.style.backgroundImage = `url('${bannerUrl}')`;
   });
 }
 
@@ -65,25 +72,27 @@ function fillProfileInputs(profile) {
 
 export function setProfileEditMode(isEditing) {
   profileEditor.isEditing = isEditing;
-  const els = [
-    document.getElementById('profile-edit-tools'),
-    document.getElementById('profile-save-btn')
-  ];
-  els.forEach(el => {
-    if (el) el.style.display = isEditing ? '' : 'none';
-  });
+  // [FIX #6] profile-edit-tools não existe no HTML; apenas profile-save-btn
+  const saveBtn = document.getElementById('profile-save-btn');
+  if (saveBtn) saveBtn.classList.toggle('hidden', !isEditing);
 
   const toggleBtn = document.getElementById('profile-edit-toggle-btn');
+  const toggleLabel = document.getElementById('profile-edit-toggle-label');
   if (toggleBtn) {
-    toggleBtn.innerHTML = isEditing ? '<i class="fa-solid fa-xmark"></i>' : '<i class="fa-solid fa-pen text-sm"></i>';
-    toggleBtn.title = isEditing ? 'Cancelar edição' : 'Editar perfil';
     toggleBtn.classList.toggle('bg-rose-500/10', isEditing);
     toggleBtn.classList.toggle('text-rose-400', isEditing);
     toggleBtn.classList.toggle('border-rose-500/20', isEditing);
   }
+  if (toggleLabel) toggleLabel.textContent = isEditing ? 'Cancelar edição' : 'Editar perfil';
 
-  document.getElementById('profile-preview-mode')?.classList.toggle('hidden', isEditing);
-  document.getElementById('profile-edit-mode')?.classList.toggle('hidden', !isEditing);
+  // [FIX #7] O HTML usa profile-edit-panel (com .hidden), não profile-preview-mode/edit-mode
+  const editPanel = document.getElementById('profile-edit-panel');
+  if (editPanel) editPanel.classList.toggle('hidden', !isEditing);
+
+  // Mostrar/ocultar labels de edição (elementos com classe profile-edit-only)
+  document.querySelectorAll('.profile-edit-only').forEach(el => {
+    el.classList.toggle('hidden', !isEditing);
+  });
 }
 
 export function startProfileEditing() {

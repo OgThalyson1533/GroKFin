@@ -352,12 +352,33 @@ export function bindTxEvents() {
   el('tx-filter-btn')?.addEventListener('click', () => { el('tx-filter-menu')?.classList.toggle('hidden'); });
   el('tx-filter-close')?.addEventListener('click', () => { el('tx-filter-menu')?.classList.add('hidden'); });
   
+  // Mapeamento correto de ID do input -> propriedade no state.ui
+  const filterIdToStateKey = {
+    'tx-search': 'txSearch',
+    'tx-category': 'txCategory',
+    'tx-sort': 'txSort'
+  };
   ['tx-search', 'tx-category', 'tx-sort'].forEach(id => {
     el(id)?.addEventListener('input', (e) => {
-      state.ui[id.replace('tx-', 'tx').replace('-s', 'S').replace('-c', 'C')] = e.target.value;
+      const key = filterIdToStateKey[id];
+      if (key) state.ui[key] = e.target.value;
       state.ui.txPage = 0;
       renderTransactions();
     });
+  });
+
+  // [FIX #9] tx-reset não tinha listener, clicar não limpava os filtros
+  el('tx-reset')?.addEventListener('click', () => {
+    state.ui.txSearch = '';
+    state.ui.txCategory = 'all';
+    state.ui.txSort = 'date-desc';
+    state.ui.txDateStart = null;
+    state.ui.txDateEnd = null;
+    state.ui.txPage = 0;
+    renderTransactions();
+    // Limpa label do filtro de período
+    const periodLabel = document.getElementById('tx-period-label');
+    if (periodLabel) periodLabel.textContent = 'Filtrar por período';
   });
 
   el('tx-add-btn')?.addEventListener('click', openTxModal);

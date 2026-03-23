@@ -409,6 +409,68 @@ export function bindChatEvents() {
   if (fileInput) {
     fileInput.addEventListener('change', handleChatImageInput);
   }
+
+  // [FIX #5] Transcrição de áudio via SpeechRecognition (Web Speech API)
+  const micBtn = document.getElementById('chat-mic-btn');
+  const micIcon = document.getElementById('chat-mic-icon');
+  if (micBtn) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      micBtn.title = 'Transcrição de áudio não suportada neste navegador (use Chrome)';
+      micBtn.style.opacity = '0.4';
+      micBtn.style.cursor = 'not-allowed';
+    } else {
+      let recognition = null;
+      let isListening = false;
+
+      micBtn.addEventListener('click', () => {
+        if (isListening) {
+          recognition?.stop();
+          return;
+        }
+
+        recognition = new SpeechRecognition();
+        recognition.lang = 'pt-BR';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+          isListening = true;
+          micBtn.style.background = 'linear-gradient(135deg,#ff6685,#ff4466)';
+          micBtn.style.color = '#fff';
+          micBtn.style.border = '1px solid rgba(255,100,133,.4)';
+          if (micIcon) { micIcon.className = 'fa-solid fa-stop'; }
+          micBtn.title = 'Gravando... clique para parar';
+        };
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          if (input) {
+            input.value = transcript;
+            input.focus();
+          }
+          showToast(`Gravação concluída: "${transcript.slice(0, 40)}${transcript.length > 40 ? '…' : ''}"`, 'success');
+        };
+
+        recognition.onerror = (event) => {
+          const msgs = { 'not-allowed': 'Permissão de microfone negada.', 'no-speech': 'Nenhuma fala detectada.', 'network': 'Erro de rede.' };
+          showToast(msgs[event.error] || `Erro: ${event.error}`, 'danger');
+        };
+
+        recognition.onend = () => {
+          isListening = false;
+          micBtn.style.background = '';
+          micBtn.style.color = '';
+          micBtn.style.border = '';
+          if (micIcon) { micIcon.className = 'fa-solid fa-microphone'; }
+          micBtn.title = 'Gravar áudio';
+        };
+
+        recognition.start();
+      });
+    }
+  }
 }
 
 // [FIX #6] sendChatPrompt: função para acionar o chat programaticamente.

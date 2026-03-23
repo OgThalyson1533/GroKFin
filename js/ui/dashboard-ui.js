@@ -311,9 +311,9 @@ export function bindDashboardEvents() {
     if (window.renderAll) window.renderAll();
   });
 
-  el('manage-budgets-btn')?.addEventListener('click', () => {
-    import('../utils/dom.js').then(m => m.showToast('Funcionalidade de orçamento em breve', 'info'));
-  });
+  // [FIX #4] Listener de manage-budgets-btn removido daqui.
+  // O listener real (openBudgetModal) está em cashflow-ui.js.
+  // Manter aqui causava race condition: o toast falso ganhava.
 
   document.querySelectorAll('[data-quick-action]').forEach(btn => {
     btn.addEventListener('click', () => {
