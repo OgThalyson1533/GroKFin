@@ -157,14 +157,18 @@ export function buildSeedState() {
 }
 
 // ── Tab index migration helpers ───────────────────────────────────────────────
+
+// [FIX #5] Expandido para cobrir todas as 9 abas (0-8).
+// Antes limitava erroneamente ao índice 5, bloqueando as tabs 6, 7 e 8
+// de serem restauradas após recarregar a página.
 function mapCurrentActiveTab(index) {
-  const mapping = { 0: 0, 1: 1, 2: 2, 3: 5 };
-  return mapping[index] ?? Math.min(Math.max(index, 0), 5);
+  const mapping = { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8 };
+  return mapping[index] ?? Math.min(Math.max(index, 0), 8);
 }
 
 function mapLegacyActiveTab(index) {
   const mapping = { 0: 0, 1: 2, 2: 4, 3: 3, 4: 1 };
-  return mapping[index] ?? Math.min(Math.max(index, 0), 5);
+  return mapping[index] ?? Math.min(Math.max(index, 0), 8);
 }
 
 // ── loadState ─────────────────────────────────────────────────────────────────
@@ -206,7 +210,11 @@ export function loadState() {
 
 // ── saveState ─────────────────────────────────────────────────────────────────
 
-export function saveState(state) {
+// [FIX #2] Removido parâmetro `state` da assinatura. Todos os callers chamavam
+// saveState() sem argumento, fazendo o parâmetro chegar como `undefined` e nunca
+// persistindo nada no localStorage. Agora usa o `state` exportado deste módulo
+// diretamente, que é o objeto mutado pela aplicação inteira.
+export function saveState() {
   try {
     const toSave = { ...state, chatHistory: (state.chatHistory || []).slice(-40) };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));

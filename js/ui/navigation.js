@@ -49,15 +49,17 @@ export function switchTab(index, { force = false, skipHistory = false } = {}) {
   if (!force && state.ui.activeTab === target) return;
 
   state.ui.activeTab = target;
+  // [FIX #2] saveState() agora funciona sem argumento (usa o state do módulo)
   saveState();
   if (!skipHistory) syncLocationHash(target);
 
-  // Ocultar todas as abas
-  document.querySelectorAll('.app-view').forEach(el => el.classList.remove('active'));
+  // [FIX #1a] Ocultar todas as abas: a classe correta no HTML é 'tab-panel',
+  // não 'app-view' como estava antes — causava as abas nunca ocultarem/exibirem.
+  document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('active'));
 
-  // Exibir a aba destino e rodar hooks
-  const targetEl = document.getElementById(`view-${NAV_HASHES[target]}`) ||
-                   document.getElementById(`view-${target}`);
+  // [FIX #1b] Exibir a aba destino: os IDs no HTML são 'tab-0', 'tab-1', etc.,
+  // não 'view-home' ou 'view-0' como estava antes.
+  const targetEl = document.getElementById(`tab-${target}`);
   if (targetEl) targetEl.classList.add('active');
 
   // Atualizar sidebar UI (Desktop)
@@ -65,9 +67,10 @@ export function switchTab(index, { force = false, skipHistory = false } = {}) {
     link.classList.toggle('active', parseInt(link.dataset.tab) === target);
   });
 
-  // Atualizar bottom nav (Mobile)
+  // [FIX #4] Atualizar bottom nav (Mobile): classe correta é 'bottom-nav-button',
+  // não 'bottom-nav-btn' como estava — causava highlight do bottom nav nunca atualizar.
   const legacyIdx = {0:0, 1:1, 2:2, 3:3, 4:4, 5:4, 6:1, 7:1, 8:1}[target] || 0;
-  document.querySelectorAll('.bottom-nav-btn').forEach((btn, i) => {
+  document.querySelectorAll('.bottom-nav-button').forEach((btn, i) => {
     const icon = btn.querySelector('i');
     if (!icon) return;
     if (i === legacyIdx) {
@@ -160,3 +163,12 @@ export function bindNavigationEvents() {
     });
   });
 }
+
+// [FIX #3] Expor funções de navegação no escopo global (window).
+// O app.html usa onclick inline nos botões do painel 'Mais' e no mais-btn
+// (e.g. onclick="switchTab(6)", onclick="openMaisSheet()"). Como o código usa
+// ES modules, essas funções não estão disponíveis no escopo global por padrão,
+// causando ReferenceError ao clicar. Expor aqui resolve sem alterar o HTML.
+window.switchTab    = switchTab;
+window.openMaisSheet  = openMaisSheet;
+window.closeMaisSheet = closeMaisSheet;

@@ -1,7 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════
---  GROKFIN ELITE V6 — SUPABASE SCHEMA
+--  GROKFIN ELITE V6 — SUPABASE SCHEMA (CORRIGIDO)
 -- ═══════════════════════════════════════════════════════════════════
--- ATENÇÃO: Habilite RLS (Row Level Security) antes de usar em PRD.
 
 -- Função genérica para atualizar a coluna updated_at automaticamente
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -29,7 +28,10 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 );
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can view own profile"   ON public.profiles FOR SELECT USING (auth.uid() = id);
+-- [FIX SQL #1] Policy de INSERT ausente: sem ela, novos usuários não conseguiam
+-- criar seu próprio perfil (o upsert inicial falhava silenciosamente com RLS).
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 CREATE TRIGGER update_profiles_modtime
@@ -87,11 +89,19 @@ CREATE TABLE IF NOT EXISTS public.card_invoices (
   amount NUMERIC(12, 2) NOT NULL,
   installments INTEGER DEFAULT 1,
   installment_current INTEGER DEFAULT 1,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  -- [FIX SQL #2] Coluna updated_at e trigger ausentes em card_invoices.
+  -- Sem ela, atualizações de faturas não podiam ser rastreadas e o upsert
+  -- não tinha como detectar conflitos de tempo para multi-device sync.
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE public.card_invoices ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage own card invoices" ON public.card_invoices FOR ALL USING (auth.uid() = user_id);
+
+-- [FIX SQL #2] Trigger correspondente ao updated_at adicionado acima.
+CREATE TRIGGER update_card_invoices_modtime
+BEFORE UPDATE ON public.card_invoices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 4. GOALS (Metas)
@@ -185,3 +195,18 @@ CREATE TABLE IF NOT EXISTS public.exchange_rate_cache (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 -- Nenhuma RLS específica, ou permitir leitura para todos os autenticados.
+
+-- ═══════════════════════════════════════════════════════════════════
+-- SCRIPT DE MIGRAÇÃO (rodar apenas em banco existente, não em novo)
+-- Se você já tem o schema antigo aplicado, execute os comandos abaixo
+-- separadamente para aplicar apenas os fixes sem recriar tabelas:
+-- ═══════════════════════════════════════════════════════════════════
+-- [FIX SQL #1] Adicionar policy INSERT em profiles (se não existir):
+--   CREATE POLICY "Users can insert own profile" ON public.profiles
+--     FOR INSERT WITH CHECK (auth.uid() = id);
+--
+-- [FIX SQL #2] Adicionar updated_at + trigger em card_invoices (se não existir):
+--   ALTER TABLE public.card_invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+--   CREATE TRIGGER update_card_invoices_modtime
+--     BEFORE UPDATE ON public.card_invoices FOR EACH ROW
+--     EXECUTE FUNCTION update_updated_at_column();

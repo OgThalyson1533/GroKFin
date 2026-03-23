@@ -14,7 +14,7 @@ import { bindGoalEvents, renderGoals } from './ui/goals-ui.js';
 import { bindCardEvents, renderCards } from './ui/cards-ui.js';
 import { bindCashflowEvents, renderCashflow } from './ui/cashflow-ui.js';
 import { bindInvestmentEvents, renderInvestments } from './ui/investments-ui.js';
-import { bindChatEvents } from './ui/chat-ui.js';
+import { bindChatEvents, sendChatPrompt } from './ui/chat-ui.js';
 import { bindProfileEvents, renderProfile } from './ui/profile-ui.js';
 import { calculateAnalytics } from './analytics/engine.js';
 import { showToast } from './utils/dom.js';

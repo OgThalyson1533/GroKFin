@@ -319,3 +319,18 @@ export function bindChatEvents() {
     });
   }
 }
+
+// [FIX #6] sendChatPrompt: função para acionar o chat programaticamente.
+// Era referenciada em goals-ui.js como window.sendChatPrompt mas nunca havia
+// sido definida em nenhum arquivo, causando erro silencioso ao clicar em
+// "Briefing IA" em uma meta. A função injeta o texto no input do chat e dispara
+// o envio, tornando o atalho de metas funcional.
+export function sendChatPrompt(text) {
+  const input = document.getElementById('chat-input');
+  if (!input) return;
+  input.value = String(text || '').trim();
+  sendChatMessage();
+}
+
+// Expõe globalmente para uso via window.sendChatPrompt (ex: goals-ui.js)
+window.sendChatPrompt = sendChatPrompt;
