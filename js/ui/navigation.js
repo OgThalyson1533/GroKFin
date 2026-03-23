@@ -5,8 +5,14 @@
 
 import { state, saveState } from '../state.js';
 import { NAV_LABELS, NAV_ICONS, NAV_HASHES } from '../config.js';
-import { mapCurrentActiveTab, mapLegacyActiveTab, hashToTab, clamp } from '../utils/dom.js';
+import { clamp } from '../utils/math.js';
 import { renderCards } from './cards-ui.js';
+
+export function hashToTab(hash) {
+  const clean = String(hash).replace(/^#/, '');
+  const idx = NAV_HASHES.indexOf(clean);
+  return idx >= 0 ? idx : 0;
+}
 import { renderCashflow } from './cashflow-ui.js';
 import { renderInvestments, renderSimulator } from './investments-ui.js';
 
@@ -60,7 +66,7 @@ export function switchTab(index, { force = false, skipHistory = false } = {}) {
   });
 
   // Atualizar bottom nav (Mobile)
-  const legacyIdx = mapLegacyActiveTab(target);
+  const legacyIdx = {0:0, 1:1, 2:2, 3:3, 4:4, 5:4, 6:1, 7:1, 8:1}[target] || 0;
   document.querySelectorAll('.bottom-nav-btn').forEach((btn, i) => {
     const icon = btn.querySelector('i');
     if (!icon) return;
