@@ -355,4 +355,7 @@ export function bindGoalEvents() {
       }
     }
   });
+
+  window.openEditGoal = openEditGoal;
+  window.confirmDeleteGoal = confirmDeleteGoal;
 }

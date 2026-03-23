@@ -388,4 +388,8 @@ export function bindTxEvents() {
       if (select) select.value = '';
     }
   });
+
+  window.openEditTx = openEditTx;
+  window.confirmDeleteTx = confirmDeleteTx;
+  window.loadMoreTransactions = loadMoreTransactions;
 }

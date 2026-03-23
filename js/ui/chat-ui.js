@@ -5,7 +5,7 @@
 
 import { state, saveState } from '../state.js';
 import { uid } from '../utils/math.js';
-import { richText } from '../utils/format.js';
+import { richText, formatMoney, parseCurrencyInput } from '../utils/format.js';
 import { formatShortTime } from '../utils/date.js';
 import { calculateAnalytics, buildPrimaryInsight } from '../analytics/engine.js';
 import { showToast, normalizeText } from '../utils/dom.js';
@@ -226,6 +226,42 @@ export function buildAssistantReply(rawText) {
   return `Posso te ajudar com **saldo**, **maiores gastos**, **metas**, **relatório** e **câmbio**. Tenta algo como: **"onde estou gastando mais?"** ou **"qual meta devo acelerar?"**`;
 }
 
+export function handleBotTransaction(text) {
+  const isIncome = text.toLowerCase().includes('recebi') || text.toLowerCase().includes('ganhei');
+  const isExpense = text.toLowerCase().includes('gastei') || text.toLowerCase().includes('paguei') || text.toLowerCase().includes('comprei');
+
+  if (!isIncome && !isExpense) return null;
+
+  const valueMatch = text.match(/(?:R\$|r\$)?\s*(\d+[.,\d]*)/);
+  if (!valueMatch) return null;
+
+  let val = parseCurrencyInput(valueMatch[1]);
+  if (val <= 0) return null;
+  if (isExpense) val = -val;
+
+  let cat = isIncome ? 'Receita' : 'Rotina';
+  const l = text.toLowerCase();
+  if (l.includes('mercado') || l.includes('ifood') || l.includes('comida') || l.includes('padaria') || l.includes('supermercado')) cat = 'Alimentação';
+  else if (l.includes('uber') || l.includes('gasolina') || l.includes('transporte')) cat = 'Transporte';
+  else if (l.includes('cinema') || l.includes('shopee') || l.includes('roupa')) cat = 'Lazer';
+  else if (l.includes('farmacia') || l.includes('remedio') || l.includes('saude')) cat = 'Saúde';
+
+  const desc = text.replace(/(recebi|ganhei|gastei|paguei|comprei)/i, '')
+                   .replace(valueMatch[0], '')
+                   .replace(/^(no|na|com|de|em\s|pra\s)/i, '')
+                   .trim() || 'Despesa via chat';
+
+  const tx = { id: uid('tx'), desc: desc.charAt(0).toUpperCase() + desc.slice(1), value: val, cat, date: new Date().toISOString().split('T')[0] };
+  
+  if (!state.transactions) state.transactions = [];
+  state.transactions.push(tx);
+  state.balance += val;
+  saveState();
+  if (window.appRenderAll) window.appRenderAll();
+
+  return `Pronto! Registrei **${tx.desc}** no valor de **${formatMoney(val)}** na categoria **${cat}**. Seu saldo atualizado é **${formatMoney(state.balance)}**.`;
+}
+
 export async function sendChatMessage() {
   const input = document.getElementById('chat-input');
   const text = input?.value.trim();
@@ -234,6 +270,13 @@ export async function sendChatMessage() {
   pushChatMessage('user', text);
   input.value = '';
   setChatTyping(true);
+
+  const txReply = handleBotTransaction(text);
+  if (txReply) {
+    setChatTyping(false);
+    pushChatMessage('assistant', txReply);
+    return;
+  }
 
   const apiKey = localStorage.getItem('grokfin_anthropic_key');
   if (apiKey) {
@@ -308,15 +351,63 @@ ${recentTxs}`;
   return data.content?.[0]?.text || 'Sem resposta da IA.';
 }
 
+export async function sendGeminiImageMessage(base64, mimeType, apiKey) {
+  const payload = {
+    contents: [{
+      parts: [
+        { text: "Analise este comprovante ou imagem financeira. Se for uma despesa, extraia o valor, e o que foi pago. Seja breve e direto." },
+        { inline_data: { mime_type: mimeType, data: base64 } }
+      ]
+    }]
+  };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (!res.ok) throw new Error('Falha no Gemini Vision API');
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Não consegui ler a imagem.';
+}
+
+export function handleChatImageInput(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    const base64Part = evt.target.result.split(',')[1];
+    pushChatMessage('user', `[Imagem Anexada: ${file.name}]`);
+    setChatTyping(true);
+
+    const apiKey = localStorage.getItem('grokfin_anthropic_key');
+    if (apiKey && apiKey.startsWith('AIza')) {
+      try {
+        const reply = await sendGeminiImageMessage(base64Part, file.type, apiKey);
+        setChatTyping(false);
+        pushChatMessage('assistant', reply);
+      } catch (err) {
+        setChatTyping(false);
+        pushChatMessage('assistant', `⚠️ Erro ao analisar imagem: ${err.message}`);
+      }
+    } else {
+      setChatTyping(false);
+      pushChatMessage('assistant', '⚠️ Para ler imagens, conecte uma chave **Gemini** (começa com AIza). Configure na aba Supabase/IA no login.');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
 export function bindChatEvents() {
   const btn = document.getElementById('chat-send-btn');
   const input = document.getElementById('chat-input');
+  const fileInput = document.getElementById('file-upload');
   
   if (btn) btn.addEventListener('click', sendChatMessage);
   if (input) {
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
     });
+  }
+  if (fileInput) {
+    fileInput.addEventListener('change', handleChatImageInput);
   }
 }
 

@@ -17,10 +17,14 @@ import { renderCashflow } from './cashflow-ui.js';
 import { renderInvestments, renderSimulator } from './investments-ui.js';
 
 export function syncActiveViewLabel(index = 0) {
-  const lbl = document.getElementById('active-view-label');
-  const icon = document.getElementById('active-view-icon');
-  if (lbl) lbl.textContent = NAV_LABELS[index] || 'GrokFin';
-  if (icon) icon.className = `fa-solid ${NAV_ICONS[index] || 'fa-house'} text-cyan-400 mr-2`;
+  // FIX: HTML uses id="current-view-chip" (combined icon+text pill)
+  // Previous code targeted non-existent 'active-view-label' and 'active-view-icon' IDs.
+  const chip = document.getElementById('current-view-chip');
+  if (chip) {
+    const icon = NAV_ICONS[index] || 'fa-house';
+    const label = NAV_LABELS[index] || 'GrokFin';
+    chip.innerHTML = `<i class="fa-solid ${icon} text-cyan-300"></i> ${label}`;
+  }
 
   const dot = document.getElementById('mais-active-dot');
   const maisBtn = document.getElementById('mais-btn');

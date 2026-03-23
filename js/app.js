@@ -7,17 +7,18 @@ import { loadState, state } from './state.js';
 import { initAuth } from './services/auth.js';
 import { isSupabaseConfigured } from './services/supabase.js';
 import { bindNavigationEvents, syncLocationHash, syncActiveViewLabel, switchTab } from './ui/navigation.js';
-import { bindDashboardEvents, renderDashboard } from './ui/dashboard-ui.js';
+import { bindDashboardEvents, renderDashboard, renderHeaderMeta } from './ui/dashboard-ui.js';
 import { renderCharts } from './ui/charts.js';
 import { bindTxEvents, renderTransactions } from './ui/transactions-ui.js';
 import { bindGoalEvents, renderGoals } from './ui/goals-ui.js';
 import { bindCardEvents, renderCards } from './ui/cards-ui.js';
 import { bindCashflowEvents, renderCashflow } from './ui/cashflow-ui.js';
 import { bindInvestmentEvents, renderInvestments } from './ui/investments-ui.js';
-import { bindChatEvents, sendChatPrompt } from './ui/chat-ui.js';
+import { bindChatEvents } from './ui/chat-ui.js';
 import { bindProfileEvents, renderProfile } from './ui/profile-ui.js';
 import { calculateAnalytics } from './analytics/engine.js';
 import { showToast } from './utils/dom.js';
+import { initOnboarding } from './ui/onboarding.js';
 
 window.renderAll = function() {
   const analytics = calculateAnalytics(state);
@@ -26,11 +27,14 @@ window.renderAll = function() {
   renderDashboard(analytics);
   renderCharts(analytics);
   renderTransactions();
-  renderGoals();
+  renderGoals(analytics);
   renderCards();
   renderCashflow();
   renderInvestments();
 }
+
+window.appRenderAll = window.renderAll;
+window.renderHeaderMeta = renderHeaderMeta;
 
 async function initApp() {
   // 0. Autenticação restrita (bloquear se Supabase estiver configurado e o usuário não existir)
@@ -73,6 +77,9 @@ async function initApp() {
      syncLocationHash(state.ui.activeTab || 0);
      syncActiveViewLabel(state.ui.activeTab || 0);
   }
+
+  // 6. Inicia Onboarding de Novos Usuários
+  initOnboarding();
 
   console.info('[GrokFin] Aplicação inicializada de forma modular.');
 }

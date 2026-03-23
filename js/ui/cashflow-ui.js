@@ -277,6 +277,10 @@ export function bindCashflowEvents() {
   });
 
   window.removeFixedRow = removeFixedRow;
+  window.openFixedModal = openFixedModal;
+  window.saveFixedModal = saveFixedModal;
+  window.addFixedRow = addFixedRow;
   window.openBudgetModal = openBudgetModal;
+  window.saveBudgets = saveBudgets;
 }
 

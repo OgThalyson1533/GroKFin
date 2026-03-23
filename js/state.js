@@ -97,6 +97,7 @@ export function buildSeedState() {
   ];
 
   return {
+    isNewUser: true,
     balance: 12450.78,
     exchange: {
       usd: 5.92, eur: 6.45, btc: 312450,
@@ -192,6 +193,7 @@ export function loadState() {
     return {
       ...seed,
       ...saved,
+      isNewUser: saved.isNewUser ?? (raw ? false : true),
       exchange:     { ...seed.exchange,     ...(saved.exchange    || {}), trend: { ...seed.exchange.trend, ...(saved.exchange?.trend || {}) } },
       ui:           { ...seed.ui,           ...(saved.ui          || {}), activeTab },
       budgets:      { ...seed.budgets,      ...(saved.budgets     || {}) },
