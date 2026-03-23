@@ -32,7 +32,7 @@ window.renderAll = function() {
   renderInvestments();
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initApp() {
   // 0. Autenticação restrita (bloquear se Supabase estiver configurado e o usuário não existir)
   const user = await initAuth();
   if (isSupabaseConfigured && !user) {
@@ -75,4 +75,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   console.info('[GrokFin] Aplicação inicializada de forma modular.');
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}

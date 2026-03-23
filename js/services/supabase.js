@@ -11,7 +11,15 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 // Tenta pegar de variáveis injetadas ou do ambiente
 // Para rodar local sem bundler, o usuário pode definir no localStorage ou hardcoded
 const getEnv = (key) => {
-  return window[`__ENV_${key}`] || localStorage.getItem(`grokfin_env_${key}`) || '';
+  let val = window[`__ENV_${key}`] || localStorage.getItem(`grokfin_env_${key}`);
+  if (!val) {
+    try {
+      const cfg = JSON.parse(localStorage.getItem('grokfin-cfg') || '{}');
+      if (key === 'SUPABASE_URL') val = cfg.supabaseUrl;
+      if (key === 'SUPABASE_ANON_KEY') val = cfg.supabaseAnonKey;
+    } catch(e) {}
+  }
+  return val || '';
 };
 
 export const SUPABASE_URL = getEnv('SUPABASE_URL');
