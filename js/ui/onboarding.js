@@ -536,6 +536,14 @@ export function initOnboarding() {
       const balance = parseCurrencyInput(balanceRaw);
 
       if (balance > 0) {
+        state.transactions.unshift({
+          id: uid('tx'),
+          date: formatDateBR(new Date()),
+          desc: 'Saldo Inicial',
+          cat: 'Receita',
+          value: balance,
+          payment: 'conta'
+        });
         state.balance = balance;
         ctx.balance = balance;
       }
@@ -545,8 +553,9 @@ export function initOnboarding() {
       const txType  = document.getElementById('ob-tx-type')?.value;
       const txValue = parseCurrencyInput(txRaw);
 
-      // [FIX] Clear seed transactions for new users starting fresh
-      state.transactions = [];
+      // [FIX] Clear seed transactions for new users starting fresh, but keep the Saldo Inicial we might have just added
+      const initialTx = state.transactions.find(t => t.desc === 'Saldo Inicial');
+      state.transactions = initialTx ? [initialTx] : [];
 
       if (txDesc && txValue > 0) {
         const finalValue = txType === 'entrada' ? txValue : -txValue;

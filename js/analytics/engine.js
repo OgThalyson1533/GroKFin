@@ -6,7 +6,7 @@
 
 import { parseDateBR, addMonths } from '../utils/date.js';
 import { formatMoney, formatNumber, formatPercent } from '../utils/format.js';
-import { clamp } from '../utils/math.js';
+import { clamp, uid } from '../utils/math.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -354,7 +354,7 @@ export function processRecurrences(state) {
       
       const val = -Math.abs(exp.value);
       state.transactions.push({
-        id: 'tx-cron-' + Math.random().toString(36).substring(2, 9),
+        id: uid('tx'),
         desc: exp.name,
         value: val,
         cat: exp.category || 'Moradia',

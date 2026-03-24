@@ -20,33 +20,44 @@ function toSqlDate(brDateStr) {
 export async function syncToSupabase(state) {
   if (!isSupabaseConfigured || !currentUser) return;
 
+  const cleanUUID = (idStr) => {
+    if (!idStr) return crypto.randomUUID();
+    const parts = idStr.split('-');
+    if (parts.length > 5) return parts.slice(1).join('-'); // Remove prefix (e.g. 'tx-', 'goal-')
+    if (parts.length === 5 && idStr.length === 36) return idStr;
+    // Fallback para UUIDs extremamente malformados
+    return crypto.randomUUID();
+  };
+
   try {
     const uid = currentUser.id;
 
     // 1. Perfil
     if (state.profile) {
-      await supabase.from('profiles').upsert({
+      const { error } = await supabase.from('profiles').upsert({
         id: uid,
         nickname: state.profile.nickname,
         display_name: state.profile.displayName,
         handle: state.profile.handle,
         bio: state.profile.bio,
         avatar_url: state.profile.avatarImage,
-        banner_url: state.profile.bannerImage
+        banner_url: state.profile.bannerImage,
+        onboarding_completed: !state.isNewUser
       });
+      if (error) console.error('[Sync] Error syncing profile:', error);
     }
 
     // 2. Transações
     if (state.transactions && state.transactions.length > 0) {
       const txRows = state.transactions.map(t => ({
-        id: t.id,
+        id: cleanUUID(t.id),
         user_id: uid,
         date: toSqlDate(t.date),
         description: t.desc,
         category: t.cat,
         amount: t.value,
         payment: t.payment,
-        card_id: t.cardId,
+        card_id: t.cardId ? cleanUUID(t.cardId) : null,
         recurring_template: t.recurringTemplate,
         installments: t.installments || 1,
         installment_current: t.installmentCurrent || 1
@@ -59,7 +70,7 @@ export async function syncToSupabase(state) {
     // 3. Metas
     if (state.goals && state.goals.length > 0) {
       const goalRows = state.goals.map(g => ({
-        id: g.id,
+        id: cleanUUID(g.id),
         user_id: uid,
         name: g.nome,
         current_amount: g.atual,
@@ -68,13 +79,14 @@ export async function syncToSupabase(state) {
         custom_image: g.img,
         deadline: g.deadline || null
       }));
-      await supabase.from('goals').upsert(goalRows);
+      const { error } = await supabase.from('goals').upsert(goalRows);
+      if (error) console.error('[Sync] Error syncing goals:', error);
     }
 
     // 4. Cartões e Faturas
     if (state.cards && state.cards.length > 0) {
       const cardRows = state.cards.map(c => ({
-        id: c.id,
+        id: cleanUUID(c.id),
         user_id: uid,
         name: c.name,
         flag: c.flag,
@@ -84,7 +96,8 @@ export async function syncToSupabase(state) {
         closing_day: c.closing || null,
         due_day: c.due || null
       }));
-      await supabase.from('cards').upsert(cardRows);
+      const { error } = await supabase.from('cards').upsert(cardRows);
+      if (error) console.error('[Sync] Error syncing cards:', error);
 
       // Faturas (Invoices)
       const invoiceRows = [];
@@ -92,9 +105,9 @@ export async function syncToSupabase(state) {
         if (card.invoices && card.invoices.length > 0) {
           card.invoices.forEach(inv => {
             invoiceRows.push({
-              id: inv.id,
+              id: cleanUUID(inv.id),
               user_id: uid,
-              card_id: card.id,
+              card_id: cleanUUID(card.id),
               description: inv.desc,
               category: inv.cat,
               amount: inv.value,
@@ -105,14 +118,15 @@ export async function syncToSupabase(state) {
         }
       });
       if (invoiceRows.length > 0) {
-        await supabase.from('card_invoices').upsert(invoiceRows);
+        const { error: invErr } = await supabase.from('card_invoices').upsert(invoiceRows);
+        if (invErr) console.error('[Sync] Error syncing invoices:', invErr);
       }
     }
 
     // 5. Investimentos
     if (state.investments && state.investments.length > 0) {
       const invRows = state.investments.map(i => ({
-        id: i.id,
+        id: cleanUUID(i.id),
         user_id: uid,
         name: i.name,
         type: i.type,
@@ -120,13 +134,14 @@ export async function syncToSupabase(state) {
         current_value: i.value,
         cost_basis: i.cost
       }));
-      await supabase.from('investments').upsert(invRows);
+      const { error } = await supabase.from('investments').upsert(invRows);
+      if (error) console.error('[Sync] Error syncing investments:', error);
     }
 
     // 6. Custos Fixos
     if (state.fixedExpenses && state.fixedExpenses.length > 0) {
       const fxRows = state.fixedExpenses.map(f => ({
-        id: f.id,
+        id: cleanUUID(f.id),
         user_id: uid,
         name: f.name,
         category: f.cat,
@@ -135,7 +150,8 @@ export async function syncToSupabase(state) {
         is_income: f.isIncome || false,
         is_active: f.active !== false
       }));
-      await supabase.from('fixed_expenses').upsert(fxRows);
+      const { error } = await supabase.from('fixed_expenses').upsert(fxRows);
+      if (error) console.error('[Sync] Error syncing fixed_expenses:', error);
     }
 
     console.info('[Sync] Backup na nuvem concluído com sucesso.');
@@ -154,7 +170,9 @@ export async function syncFromSupabase(state) {
     
     // Profiles
     const { data: profiles } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+    let isOnboardingCompleted = false;
     if (profiles) {
+      isOnboardingCompleted = profiles.onboarding_completed || false;
       state.profile = {
         nickname: profiles.nickname || (state.profile?.nickname || 'Anônimo'),
         displayName: profiles.display_name || (state.profile?.displayName || 'GrokFin User'),
@@ -183,8 +201,12 @@ export async function syncFromSupabase(state) {
           installmentCurrent: t.installment_current
         };
       });
+      // [FIX] Recalcula o saldo com base nas transações reais (Previne saldo fantasma antigo)
+      state.balance = state.transactions.reduce((acc, t) => acc + t.value, 0);
     } else {
-      state.transactions = []; // Usuário não tem txs no Supabase
+      // Usuário não tem txs no Supabase
+      state.transactions = [];
+      state.balance = 0; // [FIX] Garante que um novo usuário comece com saldo 0
     }
 
     // Goals
@@ -271,10 +293,13 @@ export async function syncFromSupabase(state) {
       state.investments = [];
     }
 
-    // Se encontramos dados, marcamos que o usuário não é novo no "universo da aplicação" 
-    // mesmo que fosse no local storage. Evitando o default mock data.
-    if ((txs && txs.length) || (gols && gols.length) || profiles) {
+    // A flag definitiva que o backend diz que o usuário já completou o onboarding visual
+    if (isOnboardingCompleted) {
       state.isNewUser = false;
+    } else if ((txs && txs.length) || (gols && gols.length)) {
+      state.isNewUser = false;
+    } else {
+      state.isNewUser = true; // [FIX] Força a reativação do tour para usuários que não têm dados
     }
 
     console.info('[Sync] Pull from Supabase concluído com sucesso.');

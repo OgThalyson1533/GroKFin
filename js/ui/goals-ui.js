@@ -168,9 +168,21 @@ export function renderGoals(analytics) {
                 </div>
 
                 <div class="mt-2 flex flex-wrap gap-2 sm:gap-3 items-center">
-                  <button data-goal-contribute="${goal.id}" data-amount="${contribution}" class="flex-1 min-w-[120px] rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 px-4 py-3 sm:py-3.5 text-sm font-black text-black shadow-brand transition-transform hover:scale-[1.02] active:scale-95 ${contribution > 0 ? '' : 'pointer-events-none opacity-50 grayscale'}">
-                    ${contribution > 0 ? `Aportar ${formatMoney(contribution)}` : 'Concluída'}
-                  </button>
+                  ${contribution > 0 ? `
+                    <div class="flex-1 min-w-[160px] flex items-stretch rounded-2xl bg-black/40 border border-white/20 p-1 focus-within:border-cyan-400/50 transition-colors shadow-inner">
+                      <div class="flex items-center pl-3">
+                         <span class="text-xs font-bold text-white/40 mr-1">R$</span>
+                         <input id="goal-invest-${goal.id}" type="text" inputmode="decimal" class="w-full bg-transparent text-sm font-black text-white outline-none placeholder-white/20" value="${contribution.toFixed(2).replace('.', ',')}" />
+                      </div>
+                      <button data-goal-contribute="${goal.id}" class="rounded-xl shrink-0 bg-gradient-to-r from-cyan-300 to-emerald-300 px-4 py-2 text-xs font-black tracking-wide text-black shadow-[0_0_12px_rgba(0,245,255,0.2)] transition-transform hover:scale-[1.02] active:scale-95">
+                        NOVO APORTE
+                      </button>
+                    </div>
+                  ` : `
+                    <button class="flex-1 min-w-[120px] rounded-2xl bg-white/5 border border-white/10 px-4 py-3 sm:py-3.5 text-sm font-black text-white/40 pointer-events-none">
+                      ✅ Meta Concluída
+                    </button>
+                  `}
                   <button data-goal-brief="${goal.id}" class="shrink-0 flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 w-12 h-11 sm:h-12 text-white transition-colors hover:bg-white/15" title="Ler com IA">
                     <i class="fa-solid fa-robot"></i>
                   </button>
@@ -390,7 +402,14 @@ export function bindGoalEvents() {
   document.getElementById('goals-container')?.addEventListener('click', e => {
     const contBtn = e.target.closest('[data-goal-contribute]');
     if (contBtn) {
-      applyGoalContribution(contBtn.dataset.goalContribute, Number(contBtn.dataset.amount));
+      const gid = contBtn.dataset.goalContribute;
+      const inputEl = document.getElementById(`goal-invest-${gid}`);
+      const val = inputEl ? parseCurrencyInput(inputEl.value) : Number(contBtn.dataset.amount);
+      if (val > 0) {
+        applyGoalContribution(gid, val);
+      } else {
+        import('../utils/dom.js').then(m => m.showToast('Informe um valor acima de zero.', 'warning'));
+      }
     }
     const briefBtn = e.target.closest('[data-goal-brief]');
     if (briefBtn && window.switchTab && window.sendChatPrompt) {

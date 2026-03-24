@@ -13,12 +13,12 @@ export const fromCents = (cents) => Number(cents) / 100;
 export const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
 
 /**
- * Gera ID único criptograficamente seguro.
- * FIX Bug #5: usa crypto.randomUUID() ao invés de Math.random().
+ * Gera ID único criptograficamente seguro (compatível com colunas UUID do Supabase).
+ * FIX Bug #5: usa crypto.randomUUID() puro.
  * @param {string} prefix
  * @returns {string}
  */
-export const uid = (prefix = 'id') => `${prefix}-${crypto.randomUUID()}`;
+export const uid = (prefix = 'id') => crypto.randomUUID();
 
 /** Taxa de poupança em % — zero se incomes = 0 */
 export const savingRate = (incomes, net) =>

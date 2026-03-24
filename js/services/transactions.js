@@ -14,6 +14,10 @@ export async function fetchRemoteTransactions() {
 
 export async function deleteRemoteTransaction(id) {
   if (!isSupabaseConfigured) return;
-  const { error } = await supabase.from('transactions').delete().eq('id', id);
-  if (error) console.error('[Transactions] Delete erro:', error);
+  try {
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (error) console.error('[Transactions] Delete erro:', error);
+  } catch (err) {
+    console.error('[Transactions] Falha na exclusão remota:', err);
+  }
 }

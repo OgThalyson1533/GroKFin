@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   bio TEXT,
   avatar_url TEXT,
   banner_url TEXT,
+  onboarding_completed BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -224,4 +225,7 @@ CREATE TABLE IF NOT EXISTS public.exchange_rate_cache (
 --   ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS recurring_template BOOLEAN DEFAULT FALSE;
 --   ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS installments INTEGER DEFAULT 1;
 --   ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS installment_current INTEGER DEFAULT 1;
+--
+-- [FIX SQL #4] Adicionar onboarding flag no perfil (se não existir):
+--   ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
 
