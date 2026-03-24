@@ -158,9 +158,15 @@ export function openEditInv(id) {
 }
 
 export function deleteInv(id) {
+  // [FIX] Ativos excluídos localmente voltavam no próximo syncFromSupabase
+  import('../services/supabase.js').then(({ supabase, isSupabaseConfigured }) => {
+    if (!isSupabaseConfigured || !supabase) return;
+    supabase.from('investments').delete().eq('id', id)
+      .catch(e => console.error('[Investments] Falha ao deletar ativo remoto:', e));
+  });
   state.investments = (state.investments || []).filter(i => i.id !== id);
   saveState();
-  if (window.appRenderAll) window.appRenderAll(); // [FIX] Reatividade sistêmica
+  if (window.appRenderAll) window.appRenderAll();
   showToast('Ativo removido.', 'info');
 }
 

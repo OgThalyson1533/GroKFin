@@ -229,3 +229,54 @@ CREATE TABLE IF NOT EXISTS public.exchange_rate_cache (
 -- [FIX SQL #4] Adicionar onboarding flag no perfil (se não existir):
 --   ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
 
+
+
+-- ═══════════════════════════════════════════════════════════════════
+-- MIGRATION SCRIPT v2 — Aplicar em banco existente
+-- Execute cada bloco separadamente no Supabase SQL Editor
+-- ═══════════════════════════════════════════════════════════════════
+
+-- [MIGRATION v2 #1] Adicionar campo used_amount em cards para evitar recálculo
+-- (opcional — o sync agora recalcula das faturas automaticamente)
+-- ALTER TABLE public.cards ADD COLUMN IF NOT EXISTS used_amount NUMERIC(12,2) DEFAULT 0;
+
+-- [MIGRATION v2 #2] Garantir que budgets tem policy de INSERT (novo schema já tem)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'budgets' AND policyname = 'Users can insert own budgets'
+  ) THEN
+    EXECUTE 'CREATE POLICY "Users can insert own budgets" ON public.budgets FOR INSERT WITH CHECK (auth.uid() = user_id)';
+  END IF;
+END $$;
+
+-- [MIGRATION v2 #3] Índices de performance para queries frequentes
+CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON public.transactions(user_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_category ON public.transactions(user_id, category);
+CREATE INDEX IF NOT EXISTS idx_card_invoices_card_id ON public.card_invoices(card_id);
+CREATE INDEX IF NOT EXISTS idx_goals_user_id ON public.goals(user_id);
+CREATE INDEX IF NOT EXISTS idx_fixed_expenses_user_id ON public.fixed_expenses(user_id);
+
+-- [MIGRATION v2 #4] Trigger automático para criar perfil ao registrar novo usuário
+-- Evita que o upsert de perfil falhe se o usuário nunca acessou o app depois do signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, display_name, nickname, handle, onboarding_completed)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'display_name', 'GrokFin User'),
+    'Navigator',
+    '@' || LOWER(REPLACE(COALESCE(NEW.raw_user_meta_data->>'display_name', 'user'), ' ', '.')),
+    FALSE
+  )
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

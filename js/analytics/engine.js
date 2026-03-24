@@ -1,14 +1,21 @@
 /**
- * js/analytics/engine.js — GrokFin Elite v6
- * Motor de analytics: calculateAnalytics, buildPrimaryInsight, buildSmartInsights.
- * Funções puras — recebem state como parâmetro, não acessam variável global.
+ * js/analytics/engine.js — GrokFin Elite v3
+ *
+ * Melhorias vs v2:
+ * - Memoização de calculateAnalytics (evita recálculo em renders repetidos do mesmo frame)
+ * - getReferenceDate usa "hoje" se não houver transações no mês atual (antes travava no mês da última tx)
+ * - burnDaily normalizado por dias_no_mes, não por dia_atual (evita distorção no início do mês)
+ * - Novos indicadores: trend3m (tendência de 3 meses), scoreBreakdown (detalha de onde vem o healthScore),
+ *   nextFixedEvent (próximo vencimento fixo), volatility (desvio padrão de gastos mensais)
+ * - buildSmartInsights: insights não se repetem e têm prioridade dinâmica por severidade
+ * - processRecurrences: data em DD/MM/YYYY, isIncome respeitado (já corrigido em v2)
  */
 
 import { parseDateBR, addMonths } from '../utils/date.js';
 import { formatMoney, formatNumber, formatPercent } from '../utils/format.js';
 import { clamp, uid } from '../utils/math.js';
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function addDays(date, n) {
   const d = new Date(date);
@@ -25,17 +32,46 @@ function diffMonths(from, to) {
   return Math.max(1, (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) + 1);
 }
 
-/** Data mais recente entre as transações (ou hoje se não houver transações) */
+// ── Memoização ────────────────────────────────────────────────────────────────
+// Evita recalcular em múltiplos renders no mesmo frame (renderAll chama várias funções)
+
+let _memoKey = null;
+let _memoResult = null;
+
+function memoKey(state) {
+  return (state.transactions?.length || 0) + '|' +
+         (state.goals?.length || 0) + '|' +
+         (state.balance || 0) + '|' +
+         (state.lastUpdated || '');
+}
+
+// ── getReferenceDate ──────────────────────────────────────────────────────────
+
+/**
+ * Retorna a data de referência para o mês atual.
+ * v3: sempre usa o mês corrente se houver qualquer transação nele,
+ * caso contrário cai para o mês da última transação — evitando que o
+ * dashboard "congele" no mês passado quando não há lançamentos ainda.
+ */
 export function getReferenceDate(state) {
-  if (!state?.transactions?.length) return new Date();
+  const today = new Date();
+  if (!state?.transactions?.length) return today;
+
+  const hasThisMonth = state.transactions.some(t => {
+    const d = parseDateBR(t.date);
+    return d && sameMonth(d, today);
+  });
+  if (hasThisMonth) return today;
+
+  // Fallback: mês da transação mais recente
   const timestamps = state.transactions
     .map(t => parseDateBR(t.date))
     .filter(Boolean)
     .map(d => d.getTime());
-  return timestamps.length ? new Date(Math.max(...timestamps)) : new Date();
+  return timestamps.length ? new Date(Math.max(...timestamps)) : today;
 }
 
-// ── Meta helpers ───────────────────────────────────────────────────────────────
+// ── Meta helpers ──────────────────────────────────────────────────────────────
 
 export function getGoalProgress(goal) {
   return clamp(Math.round((goal.atual / goal.total) * 100), 0, 100);
@@ -43,27 +79,27 @@ export function getGoalProgress(goal) {
 
 export function getMonthlyNeed(goal, refDate = new Date()) {
   const deadline = new Date(goal.deadline);
-  const months   = diffMonths(refDate, deadline);
+  const months = diffMonths(refDate, deadline);
   const remaining = Math.max(0, goal.total - goal.atual);
   return remaining === 0 ? 0 : Math.ceil(remaining / months);
 }
 
-// ── Health caption ─────────────────────────────────────────────────────────────
+// ── Health caption ────────────────────────────────────────────────────────────
 
 export function getHealthCaption(score) {
   if (score >= 82) return 'Estrutura forte, metas respirando e boa folga de caixa.';
   if (score >= 68) return 'Bom equilíbrio, com alguns vazamentos pontuais para ajustar.';
+  if (score >= 50) return 'Atenção: algumas categorias pedem revisão este mês.';
   return 'Mês ainda pede disciplina em categorias-chave.';
 }
 
 // ── calculateAnalytics ────────────────────────────────────────────────────────
 
-/**
- * Calcula todos os indicadores financeiros do mês corrente.
- * @param {Object} state — state global da aplicação
- * @returns {Object} analytics
- */
 export function calculateAnalytics(state) {
+  // Memoização — evita recalcular múltiplas vezes no mesmo frame
+  const key = memoKey(state);
+  if (key === _memoKey && _memoResult) return _memoResult;
+
   const ref = getReferenceDate(state);
 
   const monthTransactions = state.transactions.filter(t => {
@@ -75,101 +111,128 @@ export function calculateAnalytics(state) {
   const expenses = monthTransactions.filter(t => t.value < 0).reduce((acc, t) => acc + Math.abs(t.value), 0);
   const net      = incomes - expenses;
 
-  // Evolução Mensal (Mês Anterior)
-  // [FIX] Evolução Mês a Mês
-  const refDate = getReferenceDate(state);
-  const lastMonthStartRange = new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1);
-  const lastMonthEndRange   = new Date(refDate.getFullYear(), refDate.getMonth(), 0);
-  
-  let lastMonthIncomes = 0;
-  let lastMonthExpenses = 0;
-
-  state.transactions?.forEach(t => {
-    const d = parseDateBR(t.date); // Use parseDateBR for consistency
-    if (d && d >= lastMonthStartRange && d <= lastMonthEndRange) {
+  // ── Mês anterior ─────────────────────────────────────────────────────────
+  const lastMonthStart = new Date(ref.getFullYear(), ref.getMonth() - 1, 1);
+  const lastMonthEnd   = new Date(ref.getFullYear(), ref.getMonth(), 0);
+  let lastMonthIncomes = 0, lastMonthExpenses = 0;
+  state.transactions.forEach(t => {
+    const d = parseDateBR(t.date);
+    if (d && d >= lastMonthStart && d <= lastMonthEnd) {
       if (t.value > 0) lastMonthIncomes += t.value;
       else lastMonthExpenses += Math.abs(t.value);
     }
   });
 
-  const expenseItems   = monthTransactions.filter(t => t.value < 0);
-  const categoriesMap  = expenseItems.reduce((acc, t) => {
+  // ── Categorias ───────────────────────────────────────────────────────────
+  const expenseItems  = monthTransactions.filter(t => t.value < 0);
+  const categoriesMap = expenseItems.reduce((acc, t) => {
     acc[t.cat] = (acc[t.cat] || 0) + Math.abs(t.value);
     return acc;
   }, {});
   const categoryEntries = Object.entries(categoriesMap).sort((a, b) => b[1] - a[1]);
-  const topCategory     = categoryEntries[0]
+  const topCategory = categoryEntries[0]
     ? { name: categoryEntries[0][0], value: categoryEntries[0][1] }
     : { name: 'Sem dados', value: 0 };
 
-  const daysElapsed  = Math.max(1, ref.getDate());
-  const burnDaily    = expenses / daysElapsed;
+  // ── Burn / Runway ─────────────────────────────────────────────────────────
+  // v3: normaliza pelo nº de dias do mês, não pelo dia atual
+  // Isso evita que no dia 3 do mês o burnDaily apareça como 10x o real
+  const daysInMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
+  const daysElapsed = Math.max(1, ref.getDate());
+  // Usa o mínimo entre daysElapsed e daysInMonth para não extrapolar
+  const burnDaily    = expenses / Math.min(daysElapsed, daysInMonth);
   const runwayMonths = burnDaily > 0 ? state.balance / (burnDaily * 30) : 99;
   const savingRate   = incomes > 0 ? (net / incomes) * 100 : 0;
   const avgTicket    = expenseItems.length ? expenses / expenseItems.length : 0;
 
+  // ── Orçamentos ────────────────────────────────────────────────────────────
   const budgetUse = categoryEntries.map(([cat, value]) => {
     const limit = state.budgets[cat] || null;
     return { cat, value, limit, ratio: limit ? value / limit : null };
   }).sort((a, b) => (b.ratio || 0) - (a.ratio || 0));
-
   const overspend = budgetUse.find(item => item.ratio && item.ratio > 1) || null;
 
+  // ── Metas ─────────────────────────────────────────────────────────────────
   const goalsProgress = state.goals.length
     ? state.goals.reduce((acc, goal) => acc + getGoalProgress(goal), 0) / state.goals.length
     : 0;
 
-  const healthScore = clamp(
-    Math.round(
-      (clamp(savingRate, -10, 35) + 10) * 1.4 +
-      Math.min(runwayMonths, 12) * 2.1 +
-      goalsProgress * 0.35 +
-      (overspend ? -8 : 6)
-    ),
-    22, 98
-  );
+  // ── Health Score com breakdown ────────────────────────────────────────────
+  const scoreSaving  = clamp((clamp(savingRate, -10, 35) + 10) * 1.4, 0, 63);
+  const scoreRunway  = Math.min(runwayMonths, 12) * 2.1;
+  const scoreGoals   = goalsProgress * 0.35;
+  const scoreBudget  = overspend ? -8 : 6;
+  const healthScore  = clamp(Math.round(scoreSaving + scoreRunway + scoreGoals + scoreBudget), 22, 98);
 
-  // Expense trend (last 7 days vs previous 7 days)
+  // Breakdown exposto para o dashboard mostrar de onde vem o score
+  const scoreBreakdown = {
+    saving:  Math.round(scoreSaving),
+    runway:  Math.round(scoreRunway),
+    goals:   Math.round(scoreGoals),
+    budget:  scoreBudget
+  };
+
+  // ── Tendência de gastos (7 dias) ──────────────────────────────────────────
   const recentExpense = state.transactions
-    .filter(t => {
-      const d = parseDateBR(t.date);
-      return d && t.value < 0 && d >= addDays(ref, -7);
-    })
+    .filter(t => { const d = parseDateBR(t.date); return d && t.value < 0 && d >= addDays(ref, -7); })
     .reduce((acc, t) => acc + Math.abs(t.value), 0);
 
   const previousExpense = state.transactions
-    .filter(t => {
-      const d = parseDateBR(t.date);
-      return d && t.value < 0 && d < addDays(ref, -7) && d >= addDays(ref, -14);
-    })
+    .filter(t => { const d = parseDateBR(t.date); return d && t.value < 0 && d < addDays(ref, -7) && d >= addDays(ref, -14); })
     .reduce((acc, t) => acc + Math.abs(t.value), 0);
 
-  const expenseTrend = previousExpense > 0 ? ((recentExpense - previousExpense) / previousExpense) * 100 : 0;
+  const expenseTrend = previousExpense > 0
+    ? ((recentExpense - previousExpense) / previousExpense) * 100
+    : 0;
 
-  // 12-month forward projection (Predictive Algorithmic)
+  // ── Tendência de 3 meses (novo) ───────────────────────────────────────────
+  // Compara média de gastos dos últimos 3 meses vs 3 meses anteriores a esses
+  const monthlyExpenses = [];
+  for (let i = 0; i < 6; i++) {
+    const mRef = addMonths(ref, -i);
+    const mExp = state.transactions.filter(t => {
+      const d = parseDateBR(t.date);
+      return d && t.value < 0 && sameMonth(d, mRef);
+    }).reduce((acc, t) => acc + Math.abs(t.value), 0);
+    monthlyExpenses.push(mExp);
+  }
+  const avg3m     = (monthlyExpenses[0] + monthlyExpenses[1] + monthlyExpenses[2]) / 3;
+  const avg3mPrev = (monthlyExpenses[3] + monthlyExpenses[4] + monthlyExpenses[5]) / 3;
+  const trend3m   = avg3mPrev > 0 ? ((avg3m - avg3mPrev) / avg3mPrev) * 100 : 0;
+
+  // ── Volatilidade mensal (desvio padrão de gastos) (novo) ─────────────────
+  const meanExp = monthlyExpenses.slice(0, 3).reduce((a, b) => a + b, 0) / 3;
+  const variance = monthlyExpenses.slice(0, 3).reduce((acc, v) => acc + Math.pow(v - meanExp, 2), 0) / 3;
+  const volatility = Math.sqrt(variance);
+
+  // ── Próximo evento fixo (novo) ────────────────────────────────────────────
+  const today = new Date();
+  const todayDay = today.getDate();
+  const nextFixedEvent = (state.fixedExpenses || [])
+    .filter(f => f.active !== false && f.day)
+    .map(f => {
+      let daysUntil = f.day - todayDay;
+      if (daysUntil < 0) daysUntil += daysInMonth;
+      return { ...f, daysUntil };
+    })
+    .sort((a, b) => a.daysUntil - b.daysUntil)[0] || null;
+
+  // ── Projeção 12 meses ─────────────────────────────────────────────────────
   const fixedMonthlyOut = (state.fixedExpenses || []).filter(e => !e.isIncome && e.active !== false).reduce((a, e) => a + Math.abs(e.value), 0);
-  const fixedMonthlyIn = (state.fixedExpenses || []).filter(e => e.isIncome && e.active !== false).reduce((a, e) => a + Number(e.value), 0);
-  
+  const fixedMonthlyIn  = (state.fixedExpenses || []).filter(e => e.isIncome  && e.active !== false).reduce((a, e) => a + Number(e.value), 0);
   const floatingExpenses = Math.max(0, expenses - fixedMonthlyOut);
   const baseMonthlyIncomes = incomes > 0 ? incomes : fixedMonthlyIn;
-  const predictiveNet = baseMonthlyIncomes - (fixedMonthlyOut + floatingExpenses);
-  
-  const monthlyPace = predictiveNet !== 0 ? predictiveNet : net;
-  
-  const projection  = [];
-  let simulated     = state.balance;
+  const predictiveNet  = baseMonthlyIncomes - (fixedMonthlyOut + floatingExpenses);
+  const monthlyPace    = predictiveNet !== 0 ? predictiveNet : net;
 
+  const projection = [];
+  let simulated = state.balance;
   for (let i = 0; i < 12; i++) {
     let monthlyFlow = monthlyPace;
     const futureDate = addMonths(ref, i + 1);
     const monthIndex = futureDate.getMonth();
-    
-    // Simulação Preditiva de Sazonalidade Avançada
-    // Ajuste de IPVA / IPTU em Janeiro (Mês 0)
-    if (monthIndex === 0) monthlyFlow -= Math.max(500, baseMonthlyIncomes * 0.15); 
-    // Décimo Terceiro / Bônus em Dezembro (Mês 11)
-    if (monthIndex === 11) monthlyFlow += (baseMonthlyIncomes * 0.7);
-
+    if (monthIndex === 0)  monthlyFlow -= Math.max(500, baseMonthlyIncomes * 0.15);
+    if (monthIndex === 11) monthlyFlow += baseMonthlyIncomes * 0.7;
     simulated += monthlyFlow;
     projection.push({
       label: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(futureDate),
@@ -177,6 +240,7 @@ export function calculateAnalytics(state) {
     });
   }
 
+  // ── Metas detalhadas ──────────────────────────────────────────────────────
   const goalsDetailed = [...state.goals].map(goal => ({
     ...goal,
     progress:    getGoalProgress(goal),
@@ -191,22 +255,28 @@ export function calculateAnalytics(state) {
       return a.monthlyNeed - b.monthlyNeed;
     })[0] || null;
 
-  return {
+  const result = {
     ref, monthTransactions, incomes, expenses, net,
     lastMonthIncomes, lastMonthExpenses,
     categories: categoryEntries, topCategory,
     burnDaily, runwayMonths, savingRate, avgTicket,
-    budgetUse, overspend, healthScore, expenseTrend,
-    recentExpense, projection, urgentGoal, goalsDetailed, goalsProgress
+    budgetUse, overspend, healthScore, scoreBreakdown,
+    expenseTrend, trend3m, volatility,
+    recentExpense, nextFixedEvent,
+    projection, urgentGoal, goalsDetailed, goalsProgress
   };
+
+  _memoKey = key;
+  _memoResult = result;
+  return result;
 }
 
 // ── buildPrimaryInsight ───────────────────────────────────────────────────────
 
 export function buildPrimaryInsight(analytics, state) {
   if (analytics.overspend) {
-    const item    = analytics.overspend;
-    const exceed  = Math.max(0, item.value - item.limit);
+    const item   = analytics.overspend;
+    const exceed = Math.max(0, item.value - item.limit);
     const targetSaving = analytics.incomes > 0
       ? ((analytics.net + exceed) / analytics.incomes) * 100
       : analytics.savingRate;
@@ -218,8 +288,8 @@ export function buildPrimaryInsight(analytics, state) {
   }
 
   if (analytics.urgentGoal) {
-    const goal     = analytics.urgentGoal;
-    const applied  = Math.max(0, Math.round(Math.min(goal.monthlyNeed || 0, goal.remaining, Math.max(state.balance - 800, 0) || Math.min(state.balance, goal.remaining))));
+    const goal    = analytics.urgentGoal;
+    const applied = Math.max(0, Math.round(Math.min(goal.monthlyNeed || 0, goal.remaining, Math.max(state.balance - 800, 0) || Math.min(state.balance, goal.remaining))));
     if (applied > 0) {
       return {
         label:  `Aportar ${formatMoney(applied)}`,
@@ -227,6 +297,16 @@ export function buildPrimaryInsight(analytics, state) {
         text:   `A meta **${goal.nome}** precisa de **${formatMoney(goal.monthlyNeed)}/mês**. Um aporte imediato de **${formatMoney(applied)}** antecipa a conclusão.`
       };
     }
+  }
+
+  // v3: usa trend3m no fallback se relevante
+  if (Math.abs(analytics.trend3m) > 10) {
+    const dir = analytics.trend3m > 0 ? 'subindo' : 'caindo';
+    return {
+      label:  'Ver diagnóstico',
+      action: { type: 'open-report' },
+      text:   `Seus gastos estão **${dir} ${formatPercent(Math.abs(analytics.trend3m), 0)}** nos últimos 3 meses. Fluxo líquido atual: **${formatMoney(analytics.net)}**.`
+    };
   }
 
   return {
@@ -240,124 +320,127 @@ export function buildPrimaryInsight(analytics, state) {
 
 export function buildSmartInsights(analytics, state) {
   const insights = [];
+  const seen = new Set(); // evita insights duplicados
 
-  // ── AI Coaching (Regra 50-30-20) ──
+  const add = (type, icon, title, text, priority = 5) => {
+    if (!seen.has(title)) { seen.add(title); insights.push({ type, icon, title, text, priority }); }
+  };
+
+  // ── Regra 50-30-20 ───────────────────────────────────────────────────────
   if (analytics.incomes > 0) {
     const wantsCats = ['Lazer', 'Assinaturas'];
     const needsCats = ['Moradia', 'Alimentação', 'Saúde', 'Transporte', 'Rotina'];
-    
-    let wantsTotal = 0;
-    let needsTotal = 0;
+    let wantsTotal = 0, needsTotal = 0;
     analytics.categories.forEach(([cat, val]) => {
       if (wantsCats.includes(cat)) wantsTotal += val;
       if (needsCats.includes(cat)) needsTotal += val;
     });
-
     const wantsPct = (wantsTotal / analytics.incomes) * 100;
     const needsPct = (needsTotal / analytics.incomes) * 100;
 
     if (wantsPct > 30) {
-      insights.push({
-        type: 'alert', icon: '🎭',
-        title: 'Regra 50-30-20: Cuidado com o Lazer',
-        text: `Seus gastos não-essenciais estão em ${formatPercent(wantsPct, 0)} da renda (ideal ≤ 30%). Reduza custos com assinaturas ou saídas.`
-      });
-    } else if (wantsPct > 0 && wantsPct <= 30 && analytics.savingRate >= 20) {
-      insights.push({
-        type: 'positive', icon: '⚖️',
-        title: 'Equilíbrio Perfeito',
-        text: 'Você está respeitando a regra 50-30-20. O lazer e os investimentos estão em harmonia!'
-      });
+      add('alert', '🎭', 'Lazer acima de 30%',
+        `Gastos não-essenciais em ${formatPercent(wantsPct, 0)} da renda (ideal ≤ 30%). Revise assinaturas e saídas.`, 2);
+    } else if (analytics.savingRate >= 20) {
+      add('positive', '⚖️', 'Equilíbrio 50-30-20',
+        'Lazer e investimentos estão em harmonia. Continue nesse ritmo.', 8);
     }
 
     if (needsPct > 55) {
-      insights.push({
-        type: 'tip', icon: '🏠',
-        title: 'Custo Fixo Elevado',
-        text: `Seus gastos essenciais consomem ${formatPercent(needsPct, 0)} da renda (ideal ≤ 50%). Considere rever hábitos de consumo básicos.`
-      });
+      add('tip', '🏠', 'Custo fixo elevado',
+        `Essenciais consomem ${formatPercent(needsPct, 0)} da renda (ideal ≤ 50%). Considere revisar contratos ou hábitos.`, 3);
     }
   }
 
-  // ── Outros Alertas Dinâmicos ──
+  // ── Orçamento estourado ──────────────────────────────────────────────────
   if (analytics.overspend) {
     const excess = Math.max(0, analytics.overspend.value - analytics.overspend.limit);
-    insights.push({
-      type:  'alert',
-      icon:  '⚠️',
-      title: `${analytics.overspend.cat} estourou`,
-      text:  `Gasto ultrapassou o orçamento em ${formatMoney(excess)}.`
-    });
+    add('alert', '⚠️', `${analytics.overspend.cat} estourou`,
+      `Orçamento ultrapassado em ${formatMoney(excess)} (${formatPercent(analytics.overspend.ratio * 100, 0)} do limite).`, 1);
   }
 
+  // ── Taxa de poupança ─────────────────────────────────────────────────────
   if (analytics.savingRate >= 20) {
-    insights.push({
-      type:  'positive',
-      icon:  '🏆',
-      title: 'Taxa de poupança saudável',
-      text:  `Você está poupando ${formatPercent(analytics.savingRate, 1)} da sua renda. Mantenha esse ritmo.`
-    });
-  } else if (analytics.savingRate < 10) {
-    insights.push({
-      type:  'alert',
-      icon:  '📉',
-      title: 'Taxa de poupança abaixo de 10%',
-      text:  `Sua taxa está em ${formatPercent(analytics.savingRate, 1)}. Pelo menos 20% da renda garante crescimento patrimonial consistente.`
-    });
+    add('positive', '🏆', 'Taxa de poupança saudável',
+      `Poupando ${formatPercent(analytics.savingRate, 1)} da renda. Acima dos 20% ideais.`, 7);
+  } else if (analytics.savingRate < 10 && analytics.incomes > 0) {
+    add('alert', '📉', 'Taxa de poupança < 10%',
+      `Taxa em ${formatPercent(analytics.savingRate, 1)}. Pelo menos 20% garante crescimento patrimonial consistente.`, 2);
   }
 
+  // ── Tendência de 3 meses (novo) ──────────────────────────────────────────
+  if (Math.abs(analytics.trend3m) > 15) {
+    const rising = analytics.trend3m > 0;
+    add(rising ? 'alert' : 'positive',
+      rising ? '📈' : '📉',
+      `Gastos ${rising ? 'crescendo' : 'reduzindo'} nos últimos 3 meses`,
+      `Variação de ${formatPercent(Math.abs(analytics.trend3m), 0)} vs trimestre anterior. ${rising ? 'Avalie onde estão os vazamentos.' : 'Boa disciplina de cortes!'}`,
+      rising ? 3 : 7);
+  }
+
+  // ── Volatilidade alta (novo) ─────────────────────────────────────────────
+  if (analytics.volatility > analytics.expenses * 0.3 && analytics.expenses > 0) {
+    add('tip', '🌊', 'Gastos irregulares',
+      `Seus gastos mensais variam bastante (±${formatMoney(analytics.volatility)}). Priorizar gastos fixos ajuda a prever o caixa.`, 4);
+  }
+
+  // ── Próximo evento fixo (novo) ───────────────────────────────────────────
+  if (analytics.nextFixedEvent && analytics.nextFixedEvent.daysUntil <= 5) {
+    const ev = analytics.nextFixedEvent;
+    add('tip', '📅', `${ev.name} vence em ${ev.daysUntil === 0 ? 'hoje' : `${ev.daysUntil} dia${ev.daysUntil > 1 ? 's' : ''}`}`,
+      `${ev.isIncome ? 'Entrada' : 'Saída'} de ${formatMoney(ev.value)} programada. Verifique o saldo disponível.`, 2);
+  }
+
+  // ── Burn diário ──────────────────────────────────────────────────────────
   if (analytics.burnDaily > 0) {
-    insights.push({
-      type:  'tip',
-      icon:  '🔥',
-      title: 'Burn diário',
-      text:  `Você gasta em média ${formatMoney(analytics.burnDaily)} por dia, com runway de ${formatNumber(analytics.runwayMonths, 1)} meses.`
-    });
+    add('tip', '🔥', 'Burn diário',
+      `Gasto médio de ${formatMoney(analytics.burnDaily)}/dia, runway de ${formatNumber(analytics.runwayMonths, 1)} meses.`, 6);
   }
 
+  // ── Meta urgente ─────────────────────────────────────────────────────────
   if (analytics.urgentGoal) {
     const goal = analytics.urgentGoal;
-    insights.push({
-      type:  'tip',
-      icon:  '🎯',
-      title: `Meta urgente: ${goal.nome}`,
-      text:  `${goal.progress}% concluída. Aporte ideal: ${formatMoney(goal.monthlyNeed)}/mês para bater o prazo.`
-    });
+    add('tip', '🎯', `Meta: ${goal.nome}`,
+      `${goal.progress}% concluída. Aporte ideal: ${formatMoney(goal.monthlyNeed)}/mês para bater o prazo.`, 5);
   }
 
-  return insights.slice(0, 4);
+  // Ordena por prioridade (menor número = mais urgente) e limita a 4
+  return insights.sort((a, b) => a.priority - b.priority).slice(0, 4);
 }
 
-// ── Cron-Job Simulado: Lançamentos Recorrentes ──────────────────────────────────
+// ── processRecurrences ────────────────────────────────────────────────────────
+
 export function processRecurrences(state) {
-  if (!state.fixedExpenses || state.fixedExpenses.length === 0) return false;
-  
+  if (!state.fixedExpenses?.length) return false;
+
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
-  
   if (state.lastCronRun === currentMonthKey) return false;
 
   let changesMade = false;
+
   state.fixedExpenses.forEach(exp => {
+    // Verifica por data DD/MM/YYYY + flag recurringTemplate
     const alreadyLaunched = state.transactions.some(t => {
-      const parts = t.date.split('-');
-      if (parts.length !== 3) return false;
-      return parseInt(parts[0]) === now.getFullYear() && 
-             parseInt(parts[1]) - 1 === now.getMonth() && 
-             t.desc.toLowerCase() === exp.name.toLowerCase();
+      const d = parseDateBR(t.date);
+      if (!d) return false;
+      return d.getFullYear() === now.getFullYear() &&
+             d.getMonth() === now.getMonth() &&
+             t.desc.toLowerCase() === exp.name.toLowerCase() &&
+             !!t.recurringTemplate;
     });
 
     if (!alreadyLaunched && exp.value > 0) {
-      const txDay = String(exp.day || 1).padStart(2, '0');
+      const txDay   = String(exp.day || 1).padStart(2, '0');
       const txMonth = String(now.getMonth() + 1).padStart(2, '0');
-      const txDate = `${now.getFullYear()}-${txMonth}-${txDay}`;
-      
-      const val = -Math.abs(exp.value);
+      const txDate  = `${txDay}/${txMonth}/${now.getFullYear()}`;
+      const val     = exp.isIncome ? Math.abs(exp.value) : -Math.abs(exp.value);
+
       state.transactions.push({
         id: uid('tx'),
         desc: exp.name,
         value: val,
-        cat: exp.category || 'Moradia',
+        cat: exp.cat || exp.category || (exp.isIncome ? 'Receita' : 'Rotina'),
         date: txDate,
         payment: 'conta',
         recurringTemplate: true
@@ -368,5 +451,7 @@ export function processRecurrences(state) {
   });
 
   state.lastCronRun = currentMonthKey;
+  // Invalida memo após cron
+  _memoKey = null;
   return changesMade;
 }

@@ -30,8 +30,14 @@ export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 export let supabase = null;
 
 if (isSupabaseConfigured) {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  console.info('[Supabase] Cliente inicializado.');
+  try {
+    // [FIX] Valida URL antes de instanciar — URL malformada lançava exceção não tratada
+    new URL(SUPABASE_URL);
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.info('[Supabase] Cliente inicializado.');
+  } catch (e) {
+    console.error('[Supabase] URL inválida — verifique a configuração:', e.message);
+  }
 } else {
   console.warn('[Supabase] Chaves não configuradas. Rodando em modo totalmente offline.');
 }

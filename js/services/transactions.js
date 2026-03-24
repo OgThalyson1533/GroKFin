@@ -15,7 +15,13 @@ export async function fetchRemoteTransactions() {
 export async function deleteRemoteTransaction(id) {
   if (!isSupabaseConfigured) return;
   try {
-    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    // [FIX] IDs locais têm prefixo (ex: 'tx-uuid'). Supabase espera UUID puro.
+    const knownPrefixes = ['tx-', 'goal-', 'card-', 'inv-', 'fx-', 'ctx-', 'msg-'];
+    let cleanId = id;
+    for (const prefix of knownPrefixes) {
+      if (cleanId.startsWith(prefix)) { cleanId = cleanId.slice(prefix.length); break; }
+    }
+    const { error } = await supabase.from('transactions').delete().eq('id', cleanId);
     if (error) console.error('[Transactions] Delete erro:', error);
   } catch (err) {
     console.error('[Transactions] Falha na exclusão remota:', err);

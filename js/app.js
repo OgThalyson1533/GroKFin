@@ -7,6 +7,7 @@ import { loadState, saveState, state } from './state.js';
 import { initAuth } from './services/auth.js';
 import { isSupabaseConfigured } from './services/supabase.js';
 import { syncFromSupabase } from './services/sync.js';
+import { fetchExchangeRates } from './services/exchange.js';
 import { bindNavigationEvents, syncLocationHash, syncActiveViewLabel, switchTab } from './ui/navigation.js';
 import { bindDashboardEvents, renderDashboard, renderHeaderMeta, renderReport } from './ui/dashboard-ui.js';
 import { renderCharts } from './ui/charts.js';
@@ -15,8 +16,9 @@ import { bindGoalEvents, renderGoals } from './ui/goals-ui.js';
 import { bindCardEvents, renderCards } from './ui/cards-ui.js';
 import { bindCashflowEvents, renderCashflow } from './ui/cashflow-ui.js';
 import { bindInvestmentEvents, renderInvestments } from './ui/investments-ui.js';
-import { bindChatEvents } from './ui/chat-ui.js';
+import { bindChatEvents, ensureChatSeed, renderChat } from './ui/chat-ui.js';
 import { bindProfileEvents, renderProfile } from './ui/profile-ui.js';
+import { renderMarketTab } from './ui/market-ui.js';
 import { calculateAnalytics, processRecurrences } from './analytics/engine.js';
 import { showToast } from './utils/dom.js';
 import { initOnboarding } from './ui/onboarding.js';
@@ -32,13 +34,15 @@ window.renderAll = function() {
     renderHeaderMeta(analytics);
     renderProfile(analytics);
     renderDashboard(analytics);
-    renderReport(analytics);   // Aba Diagnóstico acoplada
+    renderReport(analytics);
     renderCharts(analytics);
     renderTransactions();
     renderGoals(analytics);
     renderCards();
     renderCashflow();
     renderInvestments();
+    // [FIX] Aba Mercado nunca era renderizada no ciclo global
+    if (state.ui.activeTab === 9) renderMarketTab(false);
     
     renderAnimationFrame = null;
   });
@@ -67,6 +71,15 @@ async function initApp() {
     }
   }
 
+  // 1.3 Atualiza cotações de câmbio em background (sem bloquear o boot)
+  // [FIX] fetchExchangeRates nunca era chamado — app sempre usava valores estáticos do seed
+  fetchExchangeRates().then(rates => {
+    if (rates) {
+      state.exchange = { ...state.exchange, ...rates };
+      saveState();
+    }
+  }).catch(e => console.warn('[Exchange] Falha ao atualizar cotações:', e));
+
   // 1.5 Roda o Cron-Job Local de Recorrências Fixas
   const cronDidChanges = processRecurrences(state);
   if (cronDidChanges) {
@@ -89,6 +102,10 @@ async function initApp() {
   bindInvestmentEvents();
   bindChatEvents();
   bindProfileEvents();
+
+  // 3.1 Garante a mensagem de boas-vindas no chat
+  // [FIX] ensureChatSeed nunca era chamado — chat abria vazio para novos usuários
+  ensureChatSeed();
 
   // 4. Render Inicial Pleno
   window.renderAll();

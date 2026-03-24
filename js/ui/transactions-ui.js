@@ -203,8 +203,8 @@ export function openTxModal() {
   const bdDate = document.getElementById('tx-modal-date');
   if (bdDate) bdDate.value = new Date().toLocaleDateString('pt-BR');
   
-  const incRadio = document.getElementById('tx-type-income');
-  if (incRadio) incRadio.checked = true;
+  const typeSelect = document.getElementById('tx-modal-type');
+  if (typeSelect) typeSelect.value = 'saida';
   
   const recCheck = document.getElementById('tx-modal-recurring');
   if (recCheck) recCheck.checked = false;
@@ -238,10 +238,8 @@ export function openEditTx(id) {
   if (payment) payment.value = tx.payment || 'conta';
   
   const isIncome = tx.value > 0;
-  const incRadio = document.getElementById('tx-type-income');
-  const expRadio = document.getElementById('tx-type-expense');
-  if (isIncome && incRadio) incRadio.checked = true;
-  else if (!isIncome && expRadio) expRadio.checked = true;
+  const typeSelect = document.getElementById('tx-modal-type');
+  if (typeSelect) typeSelect.value = isIncome ? 'entrada' : 'saida';
 
   const recCheck = document.getElementById('tx-modal-recurring');
   if (recCheck) recCheck.checked = !!tx.recurringTemplate;
@@ -293,8 +291,9 @@ export async function handleOcrImageInput(e) {
       document.getElementById('tx-modal-desc').value = 'Comprovante Escaneado';
     }
     
-    const expRadio = document.getElementById('tx-type-expense');
-    if (expRadio) expRadio.checked = true;
+    // [FIX] Atualiza o <select> de tipo (substituiu os radios antigos)
+    const typeSelect = document.getElementById('tx-modal-type');
+    if (typeSelect) typeSelect.value = 'saida';
 
     showToast('Comprovante processado! Revise os valores.', 'success');
   } catch (err) {
@@ -392,7 +391,8 @@ export function saveTxModal() {
   const cat = document.getElementById('tx-modal-cat').value;
   const dateStr = document.getElementById('tx-modal-date').value.trim();
   const rawValue = parseCurrencyInput(document.getElementById('tx-modal-value').value);
-  const isIncome = document.getElementById('tx-type-income').checked;
+  const typeSelect = document.getElementById('tx-modal-type');
+  const isIncome = typeSelect ? typeSelect.value === 'entrada' : false;
   const payment = document.getElementById('tx-modal-payment').value;
   const cardId = document.getElementById('tx-modal-card')?.value;
   const isRecurring = document.getElementById('tx-modal-recurring')?.checked;

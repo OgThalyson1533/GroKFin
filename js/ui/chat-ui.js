@@ -96,25 +96,51 @@ export async function sendGeminiMessage(userText, apiKey) {
     `${t.date} | ${t.desc} | ${t.cat} | ${t.value >= 0 ? '+' : ''}R$${Math.abs(t.value).toFixed(2)}`
   ).join('\n');
 
+  const budgetLines = Object.entries(state.budgets || {})
+    .filter(([, v]) => v > 0)
+    .map(([cat, lim]) => {
+      const spent = analytics.categories.find(([c]) => c === cat)?.[1] || 0;
+      return `${cat}: gasto R$${spent.toFixed(2)} / limite R$${lim.toFixed(2)} (${Math.round((spent/lim)*100)}%)`;
+    }).join('\n') || 'Sem orçamentos cadastrados';
+
+  const goalLines = (state.goals || []).map(g =>
+    `${g.nome}: R$${g.atual.toFixed(2)} de R$${g.total.toFixed(2)} (${Math.round((g.atual/g.total)*100)}%) — prazo ${g.deadline ? new Date(g.deadline).toLocaleDateString('pt-BR') : 'sem prazo'}`
+  ).join('\n') || 'Sem metas';
+
+  const cardLines = (state.cards || []).map(c =>
+    `${c.name} (${c.cardType}): R$${(c.used||0).toFixed(2)} usados de R$${c.limit.toFixed(2)}`
+  ).join('\n') || 'Sem cartões';
+
   const context = [
-    'Você é o GrokFin Elite, um Assessor de Wealth Management e Educador Financeiro de altíssimo nível.',
-    'Sua missão é dar conselhos proativos, analisar riscos e usar a regra 50-30-20.',
-    'Responda em português do Brasil, de forma direta e elegante.',
-    'Use **negrito** para destacar valores e conceitos-chave.',
-    'Máximo 3 parágrafos curtos.',
+    'Você é o GrokFin Elite, assessor financeiro pessoal de altíssimo nível.',
+    'Seja direto, prático e use os DADOS REAIS do usuário em cada resposta.',
+    'Nunca invente dados. Se não souber algo, diga que não tem essa informação.',
+    'Use **negrito** para valores e conceitos-chave. Máximo 3 parágrafos curtos.',
+    'Responda em português do Brasil.',
     '',
-    'DADOS FINANCEIROS ATUAIS:',
-    `Saldo: R$${state.balance.toFixed(2)}`,
-    `Receita mês: R$${analytics.incomes.toFixed(2)}`,
-    `Despesas mês: R$${analytics.expenses.toFixed(2)}`,
+    '=== SITUAÇÃO FINANCEIRA ATUAL ===',
+    `Saldo em conta: R$${state.balance.toFixed(2)}`,
+    `Receita do mês: R$${analytics.incomes.toFixed(2)}`,
+    `Despesas do mês: R$${analytics.expenses.toFixed(2)}`,
     `Fluxo líquido: R$${analytics.net.toFixed(2)}`,
     `Taxa de poupança: ${analytics.savingRate.toFixed(1)}%`,
     `Score financeiro: ${analytics.healthScore}/100`,
     `Burn diário: R$${analytics.burnDaily.toFixed(2)}`,
-    `Maior gasto: ${analytics.topCategory.name} (R$${analytics.topCategory.value.toFixed(2)})`,
+    `Runway: ${analytics.runwayMonths.toFixed(1)} meses`,
+    `Maior gasto do mês: ${analytics.topCategory.name} (R$${analytics.topCategory.value.toFixed(2)})`,
+    `Tendência 3 meses: ${analytics.trend3m > 0 ? '+' : ''}${analytics.trend3m.toFixed(1)}%`,
     `USD: R$${state.exchange.usd} | EUR: R$${state.exchange.eur}`,
     '',
-    'ÚLTIMAS TRANSAÇÕES:',
+    '=== ORÇAMENTOS ===',
+    budgetLines,
+    '',
+    '=== METAS ===',
+    goalLines,
+    '',
+    '=== CARTÕES ===',
+    cardLines,
+    '',
+    '=== ÚLTIMAS TRANSAÇÕES ===',
     recentTxs
   ].join('\n');
 
@@ -182,7 +208,12 @@ export function buildAssistantReply(rawText) {
 
   // Intent: Saldo / Patrimônio
   if (/saldo|quanto (tenho|dinheiro)|caixa|patrimonio/.test(q)) {
-    return `Seu saldo em conta no momento é de **${formatMoney(state.balance)}**. No mês atual, você está com um fluxo líquido de **${formatMoney(analytics.net)}**. Se precisar, também posso detalhar seus gastos ou projetar seu caixa.`;
+    const invTotal = (state.investments || []).reduce((a, i) => a + i.value, 0);
+    const goalsTotal = (state.goals || []).reduce((a, g) => a + g.atual, 0);
+    const patrimonio = state.balance + invTotal + goalsTotal;
+    let msg = `Seu saldo em conta é **${formatMoney(state.balance)}**, com fluxo líquido de **${formatMoney(analytics.net)}** no mês.`;
+    if (invTotal > 0) msg += ` Somando investimentos (**${formatMoney(invTotal)}**) e metas (**${formatMoney(goalsTotal)}**), seu patrimônio total é **${formatMoney(patrimonio)}**.`;
+    return msg;
   }
 
   // Intent: Gastos específicos por categoria (ex: "gasto com alimentação")
@@ -192,7 +223,7 @@ export function buildAssistantReply(rawText) {
     // Map fuzzy matches to exact categories
     const catMap = { alimentacao: 'Alimentação', comida: 'Alimentação', mercado: 'Alimentação', restaurante: 'Alimentação', transporte: 'Transporte', uber: 'Transporte', gasolina: 'Transporte', lazer: 'Lazer', saude: 'Saúde', moradia: 'Moradia' };
     const exactCat = catMap[matchedCat];
-    const catSpentMs = state.transactions.filter(t => t.cat === exactCat && t.value < 0).reduce((a, t) => a + Math.abs(t.value), 0);
+    const catSpentMs = analytics.monthTransactions.filter(t => t.cat === exactCat && t.value < 0).reduce((a, t) => a + Math.abs(t.value), 0);
     const budget = state.budgets[exactCat];
     return `Você gastou **${formatMoney(catSpentMs)}** com **${exactCat}** este mês.${budget ? ` Isso representa **${formatPercent((catSpentMs/budget)*100,0)}** do seu teto estipulado para esta área.` : ''}`;
   }
@@ -247,8 +278,15 @@ export function buildAssistantReply(rawText) {
     return `Olá${state.profile?.nickname ? ' ' + state.profile.nickname : ''}! Sou o cérebro financeiro do GrokFin. Tente me perguntar qual foi o seu maior gasto do mês, ou quanto você deve economizar para sua próxima meta.`;
   }
 
-  // Default fallback
-  return `O que acha de explorarmos seus dados? Posso gerar o **resumo financeiro**, identificar **fugas de capital**, simular seu **burn diário** ou até registrar transações se você descrever um gasto (ex: "gastei 50 com uber"). Quais informações você precisa agora?`;
+  // Default fallback com snapshot dos dados do usuário
+  const hasData = analytics.expenses > 0 || analytics.incomes > 0;
+  if (!hasData) {
+    return `Olá! Ainda não vejo transações registradas. Comece adicionando uma receita ou despesa na aba **Conta**, ou me diga algo como **"recebi 5000 de salário"** ou **"gastei 80 no mercado"** que eu registro pra você.`;
+  }
+  const topTip = analytics.overspend
+    ? `Seu maior alerta hoje é em **${analytics.overspend.cat}** — orçamento ultrapassado.`
+    : `Seu maior gasto é **${analytics.topCategory.name}** (${formatMoney(analytics.topCategory.value)}).`;
+  return `${topTip} Score financeiro: **${analytics.healthScore}/100**, poupança: **${formatPercent(analytics.savingRate, 1)}**. Pergunte sobre metas, cartões, projeções ou diga um gasto para registrar (ex: "gastei 50 com uber").`;
 }
 
 export function handleBotTransaction(text) {
@@ -276,7 +314,7 @@ export function handleBotTransaction(text) {
                    .replace(/^(no|na|com|de|em\s|pra\s)/i, '')
                    .trim() || 'Despesa via chat';
 
-  const tx = { id: uid('tx'), desc: desc.charAt(0).toUpperCase() + desc.slice(1), value: val, cat, date: new Date().toISOString().split('T')[0] };
+  const tx = { id: uid('tx'), desc: desc.charAt(0).toUpperCase() + desc.slice(1), value: val, cat, date: new Intl.DateTimeFormat('pt-BR').format(new Date()) };
   
   if (!state.transactions) state.transactions = [];
   state.transactions.push(tx);
@@ -338,21 +376,40 @@ export async function sendClaudeAPIMessage(userText, apiKey) {
     `${t.date} | ${t.desc} | ${t.cat} | ${t.value >= 0 ? '+' : ''}R$${Math.abs(t.value).toFixed(2)}`
   ).join('\n');
 
-  const systemPrompt = `Você é o GrokFin Elite, um Assessor de Wealth Management e Educador Financeiro de altíssimo nível. 
-Sua missão é dar conselhos proativos, analisar riscos e usar a regra 50-30-20.
-Responda em português do Brasil, de forma direta e elegante. Máximo 3 parágrafos curtos.
-Use **negrito** para destacar valores e conceitos-chave.
+  const budgetCtx = Object.entries(state.budgets || {})
+    .filter(([, v]) => v > 0)
+    .map(([cat, lim]) => {
+      const spent = analytics.categories.find(([c]) => c === cat)?.[1] || 0;
+      return `  • ${cat}: R$${spent.toFixed(2)} gasto / R$${lim.toFixed(2)} limite (${Math.round((spent/lim)*100)}%)`;
+    }).join('\n') || '  Sem orçamentos definidos';
 
-DADOS DA CONTA:
-- Saldo: R$${state.balance.toFixed(2)}
-- Receita mês: R$${analytics.incomes.toFixed(2)}
-- Despesas mês: R$${analytics.expenses.toFixed(2)}
-- Fluxo líquido: R$${analytics.net.toFixed(2)}
-- Maior gasto: ${analytics.topCategory.name} (R$${analytics.topCategory.value.toFixed(2)})
-- USD: R$${state.exchange.usd} | EUR: R$${state.exchange.eur}
+  const goalsCtx = (state.goals || []).map(g =>
+    `  • ${g.nome}: ${Math.round((g.atual/g.total)*100)}% (R$${g.atual.toFixed(2)} / R$${g.total.toFixed(2)})`
+  ).join('\n') || '  Sem metas ativas';
 
-ÚLTIMAS TRANSAÇÕES:
-${recentTxs}`;
+  const cardsCtx = (state.cards || []).map(c =>
+    `  • ${c.name} [${c.cardType}]: R$${(c.used||0).toFixed(2)} / limite R$${c.limit.toFixed(2)}`
+  ).join('\n') || '  Sem cartões';
+
+  const systemPrompt = [
+    'Você é o GrokFin Elite, assessor financeiro integrado ao app do usuário.',
+    'REGRA CRÍTICA: Use SEMPRE os dados abaixo. Nunca invente números.',
+    'Seja direto e específico. Máximo 3 parágrafos. Use **negrito** para valores.',
+    'Responda em português do Brasil.',
+    '',
+    '## DADOS FINANCEIROS',
+    `Saldo: R$${state.balance.toFixed(2)}`,
+    `Receita/mês: R$${analytics.incomes.toFixed(2)} | Despesas: R$${analytics.expenses.toFixed(2)}`,
+    `Fluxo: R$${analytics.net.toFixed(2)} | Poupança: ${analytics.savingRate.toFixed(1)}%`,
+    `Score: ${analytics.healthScore}/100 | Burn/dia: R$${analytics.burnDaily.toFixed(2)} | Runway: ${analytics.runwayMonths.toFixed(1)}m`,
+    `Maior gasto: ${analytics.topCategory.name} (R$${analytics.topCategory.value.toFixed(2)})`,
+    `USD: R$${state.exchange.usd} | EUR: R$${state.exchange.eur}`,
+    '',
+    '## ORÇAMENTOS', budgetCtx,
+    '', '## METAS', goalsCtx,
+    '', '## CARTÕES', cardsCtx,
+    '', '## ÚLTIMAS TRANSAÇÕES', recentTxs
+  ].join('\n');
 
   const messages = [
     ...state.chatHistory.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text })),

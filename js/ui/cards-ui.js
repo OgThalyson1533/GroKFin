@@ -9,6 +9,7 @@ import { formatMoney, formatPercent, escapeHtml, parseCurrencyInput } from '../u
 import { iconForCategory, toneForCategory } from '../config.js';
 import { calculateAnalytics } from '../analytics/engine.js';
 import { showToast } from '../utils/dom.js';
+import { isSupabaseConfigured } from '../services/supabase.js';
 
 let _activeCardId = null;
 let _editingCardId = null;
@@ -50,19 +51,20 @@ export function renderCards() {
           </div>
           <div class="space-y-3">
             <div class="flex justify-between text-sm">
-              <span class="text-white/55">Fatura atual</span>
+              <span class="text-white/55">${card.cardType === 'debito' ? 'Utilizado (débito)' : 'Fatura atual'}</span>
               <span class="font-bold text-white">${formatMoney(card.used)}</span>
             </div>
+            ${card.cardType !== 'debito' ? `
             <div class="progress-track">
               <div class="progress-fill" style="width:${usedPct}%;background:linear-gradient(90deg,${color},${statusColor})"></div>
-            </div>
+            </div>` : ''}
             <div class="flex justify-between text-xs text-white/45">
-              <span>${formatPercent(usedPct, 0)} do limite</span>
-              <span>Disponível ${formatMoney(available)}</span>
+              <span>${card.cardType === 'debito' ? '' : `${formatPercent(usedPct, 0)} do limite`}</span>
+              <span>${card.cardType === 'debito' ? `Saldo inicial ${formatMoney(available)}` : `Disponível ${formatMoney(available)}`}</span>
             </div>
             <div class="flex gap-2 mt-2">
               <button onclick="event.stopPropagation();selectCard('${card.id}')" class="w-full rounded-xl py-2.5 text-xs font-bold text-black transition-opacity hover:opacity-90" style="background:linear-gradient(135deg,${color},${statusColor})">
-                <i class="fa-solid fa-receipt mr-1.5"></i>Ver fatura
+                <i class="fa-solid fa-receipt mr-1.5"></i>${card.cardType === 'debito' ? 'Ver lançamentos' : 'Ver fatura'}
               </button>
             </div>
           </div>
@@ -80,7 +82,7 @@ export function selectCard(id) {
   const title = document.getElementById('card-invoice-title');
   const list = document.getElementById('card-invoice-list');
   const addBtn = document.getElementById('card-tx-add-btn');
-  if (title) title.textContent = `Fatura — ${card.name}`;
+  if (title) title.textContent = card.cardType === 'debito' ? `Lançamentos — ${card.name}` : `Fatura — ${card.name}`;
   if (addBtn) addBtn.classList.remove('hidden');
   const invoices = card.invoices || [];
   if (!invoices.length) {
@@ -92,7 +94,7 @@ export function selectCard(id) {
   if (list) {
     list.innerHTML = `
       <div class="flex justify-between items-center mb-3 pb-3 border-b border-white/8">
-        <span class="text-sm text-white/55">Total da fatura</span>
+        <span class="text-sm text-white/55">${card.cardType === 'debito' ? 'Total utilizado' : 'Total da fatura'}</span>
         <span class="font-black text-white text-lg">${formatMoney(total)}</span>
       </div>
       <div class="space-y-2">
@@ -152,10 +154,19 @@ export function openEditCard(id) {
 }
 
 export function deleteCard(id) {
+  // [FIX] Cartões excluídos localmente voltavam no próximo syncFromSupabase — agora são removidos do banco
+  if (isSupabaseConfigured) {
+    import('../services/supabase.js').then(({ supabase, isSupabaseConfigured: ok }) => {
+      if (!ok || !supabase) return;
+      supabase.from('card_invoices').delete().eq('card_id', id).then(() => {
+        supabase.from('cards').delete().eq('id', id).catch(e => console.error('[Cards] Falha ao deletar cartão remoto:', e));
+      }).catch(e => console.error('[Cards] Falha ao deletar faturas remotas:', e));
+    });
+  }
   state.cards = state.cards.filter(c => c.id !== id);
   if (_activeCardId === id) _activeCardId = null;
   saveState();
-  if (window.appRenderAll) window.appRenderAll(); else renderCards(); // [FIX] Reatividade sistêmica
+  if (window.appRenderAll) window.appRenderAll(); else renderCards();
   showToast('Cartão removido.', 'info');
 }
 

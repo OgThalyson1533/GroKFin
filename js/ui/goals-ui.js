@@ -280,7 +280,7 @@ export function deleteGoal() {
   if (!_goalToDelete) return;
   const goal = state.goals.find(g => g.id === _goalToDelete);
   if (goal) {
-    state.balance += goal.atual; // Devolve o valor guardado para o caixa global
+    state.balance += goal.atual;
     state.transactions.unshift({
       id: uid('tx'),
       date: formatDateBR(new Date()),
@@ -289,6 +289,15 @@ export function deleteGoal() {
       value: goal.atual
     });
   }
+
+  // [FIX] Metas excluídas localmente voltavam no próximo syncFromSupabase
+  const goalIdToDelete = _goalToDelete;
+  import('../services/supabase.js').then(({ supabase, isSupabaseConfigured }) => {
+    if (!isSupabaseConfigured || !supabase) return;
+    supabase.from('goals').delete().eq('id', goalIdToDelete)
+      .catch(e => console.error('[Goals] Falha ao deletar meta remota:', e));
+  });
+
   state.goals = state.goals.filter(g => g.id !== _goalToDelete);
   _goalToDelete = null;
   saveState();
