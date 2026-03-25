@@ -90,11 +90,14 @@
 /* ── Bottom nav (mobile) ── */
 .bottom-nav {
   overflow-x: auto;
-  background: rgba(7,10,19,.92);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-  border-top: 1px solid rgba(255,255,255,.08);
-  box-shadow: 0 -18px 42px rgba(0,0,0,.28);
+  /* Glass-consistent: mesma linguagem visual dos painéis do app */
+  background: rgba(7,10,19,.72);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-top: 1px solid rgba(255,255,255,.10);
+  box-shadow:
+    0 -18px 42px rgba(0,0,0,.28),
+    inset 0 1px 0 rgba(255,255,255,.04);
   padding: .62rem 0 calc(.62rem + env(safe-area-inset-bottom));
 }
 
@@ -176,7 +179,33 @@
 
 /* ── Mais sheet ── */
 #mais-sheet-panel { transition: transform .28s cubic-bezier(.32,0,.67,0); }
+
+.mais-tab-btn { cursor: pointer; }
+
+.mais-tab-btn:hover {
+  border-color: rgba(255,255,255,.16) !important;
+  background: rgba(255,255,255,.08) !important;
+}
+
 .mais-tab-btn[data-tab].active {
-  border-color: rgba(0,245,255,.3) !important;
-  background: rgba(0,245,255,.08) !important;
+  border-color: rgba(0,245,255,.32) !important;
+  background: rgba(0,245,255,.10) !important;
+  box-shadow: 0 0 0 1px rgba(0,245,255,.12) inset !important;
+}
+
+.mais-tab-btn[data-tab].active span:first-child {
+  border-color: rgba(0,245,255,.28);
+  box-shadow: 0 0 16px rgba(0,245,255,.20);
+}
+
+/* ── Badge de aba ativa no botão Mais ── */
+#mais-btn.active .bottom-nav-icon::after {
+  content: '';
+  position: absolute;
+  top: -3px; right: -3px;
+  width: 9px; height: 9px;
+  background: var(--brand);
+  border-radius: 50%;
+  border: 2px solid #0a0d16;
+  box-shadow: 0 0 6px rgba(0,245,255,.5);
 }

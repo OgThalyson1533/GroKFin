@@ -125,3 +125,36 @@
 /* ── Cashflow / card selectors ── */
 #tx-card-selector-row  { flex-direction: column; }
 #tx-payment-section    { flex-direction: column; }
+
+/* ── Chat: estado de gravação ativo ─────────────────────────────────────── */
+/* Pulsar vermelho no ícone de microfone enquanto grava */
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,102,133,.50); }
+  50%       { box-shadow: 0 0 0 8px rgba(255,102,133,.0); }
+}
+
+#chat-mic-btn.recording {
+  background: linear-gradient(135deg, #ff6685, #ff4466) !important;
+  color: #fff !important;
+  border-color: rgba(255,100,133,.40) !important;
+  animation: micPulse 1.2s ease infinite;
+}
+
+/* ── Chat: input focus ring ─────────────────────────────────────────────── */
+.chat-input-wrap {
+  transition: border-color .22s ease, box-shadow .22s ease;
+}
+.chat-input-wrap:focus-within {
+  border-color: rgba(0,245,255,.35) !important;
+  box-shadow: 0 0 0 3px rgba(0,245,255,.08);
+}
+
+/* ── Mais-sheet grid responsivo ─────────────────────────────────────────── */
+/* Em telas muito estreitas (<360px) reduz para 4 colunas */
+@media (max-width: 359px) {
+  #mais-sheet-panel .grid { grid-template-columns: repeat(4, minmax(0,1fr)) !important; }
+  #mais-sheet-panel .grid > :nth-child(5) { grid-column: 1 / -1; max-width: 120px; margin: 0 auto; }
+}
+
+/* ── Payment badge extra: débito ──────────────────────────────────────────*/
+.payment-badge-debito { background: rgba(250,204,21,.10); border: 1px solid rgba(250,204,21,.20); color: #fde784; }

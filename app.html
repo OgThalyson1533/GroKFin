@@ -573,7 +573,7 @@
   style="flex-shrink:0">
   <i class="fa-solid fa-microphone" id="chat-mic-icon"></i>
 </button>
-<div class="flex h-14 min-w-[240px] flex-1 items-center rounded-2xl border border-white/10 bg-white/5 px-5 focus-within:border-cyan-300/40">
+<div class="chat-input-wrap flex h-14 min-w-[240px] flex-1 items-center rounded-2xl border border-white/10 bg-white/5 px-5">
 <input class="w-full bg-transparent outline-none placeholder:text-white/28" id="chat-input" placeholder="Pergunte algo sobre fluxo, metas, câmbio ou fale com o microfone..." type="text"/>
 </div>
 <button class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-300 to-emerald-300 text-lg text-black shadow-brand transition-transform hover:scale-105" id="chat-send-btn">
@@ -1033,11 +1033,17 @@
       </div>
       <div class="px-6 pt-2 pb-2 flex items-center justify-between">
         <p class="text-xs font-bold uppercase tracking-[.22em] text-white/35">Mais seções</p>
-        <button onclick="event.stopPropagation();closeMaisSheet()" class="w-8 h-8 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 hover:bg-white/10 transition-colors">
+        <button id="mais-sheet-close" onclick="event.stopPropagation();closeMaisSheet()" class="w-8 h-8 flex items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 hover:bg-white/10 transition-colors">
           <i class="fa-solid fa-xmark text-xs"></i>
         </button>
       </div>
-      <div class="grid grid-cols-4 gap-3 px-5 pb-8">
+      <div class="grid grid-cols-5 gap-2.5 px-5 pb-8">
+        <button data-tab="5" onclick="event.stopPropagation();closeMaisSheet();switchTab(5)" class="mais-tab-btn flex flex-col items-center gap-2.5 rounded-[20px] border border-white/8 bg-white/5 py-4 transition-all active:scale-95" style="backdrop-filter:blur(12px)">
+          <span class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/8">
+            <i class="fa-solid fa-user text-violet-300"></i>
+          </span>
+          <span class="text-[10px] font-bold text-white/80 tracking-wide uppercase">Perfil</span>
+        </button>
         <button data-tab="6" onclick="event.stopPropagation();closeMaisSheet();switchTab(6)" class="mais-tab-btn flex flex-col items-center gap-2.5 rounded-[20px] border border-white/8 bg-white/5 py-4 transition-all active:scale-95" style="backdrop-filter:blur(12px)">
           <span class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/8">
             <i class="fa-solid fa-credit-card text-cyan-300"></i>

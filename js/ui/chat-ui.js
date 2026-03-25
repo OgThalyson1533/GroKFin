@@ -5,9 +5,9 @@
 
 import { state, saveState } from '../state.js';
 import { uid } from '../utils/math.js';
-import { richText, formatMoney, parseCurrencyInput } from '../utils/format.js';
+import { richText, formatMoney, parseCurrencyInput, formatPercent } from '../utils/format.js';
 import { formatShortTime } from '../utils/date.js';
-import { calculateAnalytics, buildPrimaryInsight } from '../analytics/engine.js';
+import { calculateAnalytics } from '../analytics/engine.js';
 import { showToast, normalizeText } from '../utils/dom.js';
 
 let chatTyping = false;
@@ -73,6 +73,14 @@ export function renderChat() {
   scrollChatToBottom();
 }
 
+// Debounce de 300ms para salvar o histórico do chat — evita múltiplas
+// escritas em localStorage por sequências rápidas de mensagens (ex: erro+fallback)
+let _chatSaveTimer = null;
+function debouncedChatSave() {
+  clearTimeout(_chatSaveTimer);
+  _chatSaveTimer = setTimeout(() => saveState(), 300);
+}
+
 export function pushChatMessage(role, text) {
   state.chatHistory.push({
     id: uid('msg'),
@@ -81,7 +89,7 @@ export function pushChatMessage(role, text) {
     createdAt: new Date().toISOString()
   });
   state.chatHistory = state.chatHistory.slice(-50);
-  saveState();
+  debouncedChatSave();
   renderChat();
 }
 
@@ -290,39 +298,99 @@ export function buildAssistantReply(rawText) {
 }
 
 export function handleBotTransaction(text) {
-  const isIncome = text.toLowerCase().includes('recebi') || text.toLowerCase().includes('ganhei');
-  const isExpense = text.toLowerCase().includes('gastei') || text.toLowerCase().includes('paguei') || text.toLowerCase().includes('comprei');
+  const l = text.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // remove acentos para matching
 
+  // ── Detectar intent ───────────────────────────────────────────────────────
+  const isIncome  = /recebi|ganhei|entrou|salario|deposito|renda/.test(l);
+  const isExpense = /gastei|paguei|comprei|adicion(ei|e)|saiu|cobr|gastando/.test(l);
   if (!isIncome && !isExpense) return null;
 
-  const valueMatch = text.match(/(?:R\$|r\$)?\s*(\d+[.,\d]*)/);
+  // ── Extrair valor — aceita "R$ 10", "10,50", "10.50", "10 reais", "10 conto"
+  const valueMatch = text.match(/(?:R\$\s*)?(\d{1,6}(?:[.,]\d{1,2})?)\s*(?:reais?|conto[s]?)?/i);
   if (!valueMatch) return null;
-
   let val = parseCurrencyInput(valueMatch[1]);
   if (val <= 0) return null;
   if (isExpense) val = -val;
 
+  // ── Detectar forma de pagamento — usa o schema do transactions-ui ──────────
+  // transactions-ui espera: 'cartao_credito' | 'cartao_debito' | 'pix' | 'dinheiro' | 'conta'
+  let payment = 'conta';
+  if (/cart(a|ã)o|credito|cr[eé]dito/.test(l))   payment = 'cartao_credito';
+  else if (/d[eé]bito/.test(l))                   payment = 'cartao_debito';
+  else if (/pix/.test(l))                          payment = 'pix';
+  else if (/dinheiro|esp[eé]cie|especie/.test(l)) payment = 'dinheiro';
+
+  // Label humanizado para a resposta do chat
+  const PAYMENT_LABEL = {
+    cartao_credito: 'cartão de crédito',
+    cartao_debito:  'débito',
+    pix:            'Pix',
+    dinheiro:       'dinheiro',
+    conta:          '',
+  };
+
+  // ── Detectar data relativa ────────────────────────────────────────────────
+  let txDate = new Intl.DateTimeFormat('pt-BR').format(new Date());
+  if (/ontem/.test(l)) {
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    txDate = new Intl.DateTimeFormat('pt-BR').format(d);
+  } else if (/anteontem/.test(l)) {
+    const d = new Date(); d.setDate(d.getDate() - 2);
+    txDate = new Intl.DateTimeFormat('pt-BR').format(d);
+  }
+
+  // ── Detectar categoria ────────────────────────────────────────────────────
   let cat = isIncome ? 'Receita' : 'Rotina';
-  const l = text.toLowerCase();
-  if (l.includes('mercado') || l.includes('ifood') || l.includes('comida') || l.includes('padaria') || l.includes('supermercado')) cat = 'Alimentação';
-  else if (l.includes('uber') || l.includes('gasolina') || l.includes('transporte')) cat = 'Transporte';
-  else if (l.includes('cinema') || l.includes('shopee') || l.includes('roupa')) cat = 'Lazer';
-  else if (l.includes('farmacia') || l.includes('remedio') || l.includes('saude')) cat = 'Saúde';
+  const catRules = [
+    [/mercado|ifood|comida|padaria|supermercado|pao|fruta|lanche|almoco|jantar|cafe|pizza|hamburguer|acougue|hortifruti/, 'Alimentação'],
+    [/uber|99|taxi|gas(olina)?|combustivel|posto|onibus|metro|brt|trem|transporte|passagem|pedágio|pedagio/, 'Transporte'],
+    [/netflix|spotify|cinema|show|ingresso|shopee|roupa|calcado|sapato|lazer|jogo|steam|xbox|playstation|bar|balada|festa|amazon|magazine|americanas/, 'Lazer'],
+    [/farmacia|remedio|medico|hospital|saude|plano de saude|dentista|psicol|terapia/, 'Saúde'],
+    [/aluguel|condominio|agua|luz|energia|internet|gas|moradia|iptu|manutencao|reforma/, 'Moradia'],
+    [/salario|freelance|renda|receita|bonus|dividendo|aluguel recebido|comissao/, 'Receita'],
+    [/faculdade|escola|curso|livro|mensalidade|material/, 'Assinaturas'],
+    [/investimento|aporte|tesouro|cdb|acoes|fundo/, 'Investimentos'],
+  ];
+  for (const [regex, category] of catRules) {
+    if (regex.test(l)) { cat = category; break; }
+  }
 
-  const desc = text.replace(/(recebi|ganhei|gastei|paguei|comprei)/i, '')
-                   .replace(valueMatch[0], '')
-                   .replace(/^(no|na|com|de|em\s|pra\s)/i, '')
-                   .trim() || 'Despesa via chat';
+  // ── Extrair descrição limpando artefatos ──────────────────────────────────
+  let desc = text
+    .replace(/(recebi|ganhei|entrou|gastei|paguei|comprei|adicionei|adicione|saiu)/gi, '')
+    .replace(/R?\$?\s*\d+(?:[.,]\d{1,2})?\s*(?:reais?|contos?)?/gi, '')
+    .replace(/\b(no|na|com|de|em|pra|pelo|pela|num|numa|uns?|umas?|cartao|cartão|credito|débito|debito|pix|dinheiro|ontem|hoje|anteontem|reais|conto)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 
-  const tx = { id: uid('tx'), desc: desc.charAt(0).toUpperCase() + desc.slice(1), value: val, cat, date: new Intl.DateTimeFormat('pt-BR').format(new Date()) };
-  
+  if (!desc || desc.length < 2) desc = isIncome ? 'Receita via chat' : 'Despesa via chat';
+  desc = desc.charAt(0).toUpperCase() + desc.slice(1);
+
+  // ── Montar transação e salvar ─────────────────────────────────────────────
+  const tx = {
+    id: uid('tx'),
+    desc,
+    value: val,
+    cat,
+    payment,        // campo canônico esperado por transactions-ui
+    date: txDate,
+  };
+
   if (!state.transactions) state.transactions = [];
-  state.transactions.push(tx);
+  state.transactions.unshift(tx); // mais recente primeiro
   state.balance += val;
   saveState();
-  if (window.appRenderAll) window.appRenderAll();
+  if (typeof window.appRenderAll === 'function') window.appRenderAll();
 
-  return `Pronto! Registrei **${tx.desc}** no valor de **${formatMoney(val)}** na categoria **${cat}**. Seu saldo atualizado é **${formatMoney(state.balance)}**.`;
+  // ── Montar resposta humanizada ────────────────────────────────────────────
+  const emoji       = isIncome ? '💰' : '📝';
+  const verb        = isIncome ? 'receita' : 'despesa';
+  const methodLabel = PAYMENT_LABEL[payment] ? ` via **${PAYMENT_LABEL[payment]}**` : '';
+  const dateLabel   = txDate !== new Intl.DateTimeFormat('pt-BR').format(new Date())
+    ? ` (data: **${txDate}**)` : '';
+
+  return `${emoji} Registrei ${verb}: **${desc}** — **${formatMoney(Math.abs(val))}**${methodLabel} em **${cat}**${dateLabel}. Saldo atualizado: **${formatMoney(state.balance)}**.`;
 }
 
 export async function sendChatMessage() {
@@ -341,8 +409,9 @@ export async function sendChatMessage() {
     return;
   }
 
-  const apiKey = localStorage.getItem('grokfin_anthropic_key');
-  if (apiKey) {
+  const apiKey   = localStorage.getItem('grokfin_anthropic_key');
+  const provider = getAIProvider(apiKey);
+  if (provider !== 'none') {
     try {
       const reply = await sendClaudeAPIMessage(text, apiKey);
       setChatTyping(false);
@@ -350,8 +419,7 @@ export async function sendChatMessage() {
       return;
     } catch (err) {
       setChatTyping(false);
-      const isGemini = apiKey.startsWith('AIza');
-      const providerName = isGemini ? 'Gemini' : 'Claude';
+      const providerName = provider === 'gemini' ? 'Gemini' : 'Claude';
       pushChatMessage('assistant', `⚠️ **Erro na IA (${providerName}):** ${err.message}\n\nRespondendo com modo básico:`);
       const fallback = buildAssistantReply(text);
       pushChatMessage('assistant', fallback);
@@ -367,7 +435,7 @@ export async function sendChatMessage() {
 }
 
 export async function sendClaudeAPIMessage(userText, apiKey) {
-  if (apiKey.startsWith('AIza')) {
+  if (getAIProvider(apiKey) === 'gemini') {
     return await sendGeminiMessage(userText, apiKey);
   }
   
@@ -434,6 +502,15 @@ export async function sendClaudeAPIMessage(userText, apiKey) {
   return data.content?.[0]?.text || 'Sem resposta da IA.';
 }
 
+// ── Detecção de provedor centralizada ────────────────────────────────────────
+// Evita o antipadrão de apiKey.startsWith('AIza') espalhado por todo o arquivo.
+export function getAIProvider(key) {
+  if (!key) return 'none';
+  if (key.startsWith('AIza'))   return 'gemini';
+  if (key.startsWith('sk-ant-')) return 'claude';
+  return 'unknown';
+}
+
 export async function sendGeminiImageMessage(base64, mimeType, apiKey) {
   const payload = {
     contents: [{
@@ -450,32 +527,111 @@ export async function sendGeminiImageMessage(base64, mimeType, apiKey) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Não consegui ler a imagem.';
 }
 
+// ── Análise de imagem via Claude Vision API ───────────────────────────────────
+export async function sendClaudeImageMessage(base64, mimeType, apiKey) {
+  const PROMPT_IMAGE = [
+    'Analise este comprovante ou imagem financeira.',
+    'Extraia: (1) valor pago, (2) estabelecimento/descrição, (3) data se visível,',
+    '(4) categoria financeira provável (ex: Alimentação, Transporte, Saúde, Lazer, Moradia).',
+    'Se conseguir identificar um lançamento claro, sugira o comando de registro: ex: "Gastei R$ XX em [descrição]".',
+    'Seja direto e conciso. Responda em português do Brasil.'
+  ].join(' ');
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 400,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
+          { type: 'text', text: PROMPT_IMAGE }
+        ]
+      }]
+    }),
+    signal: controller.signal
+  });
+  clearTimeout(timeoutId);
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content?.[0]?.text || 'Não consegui ler a imagem.';
+}
+
 export function handleChatImageInput(e) {
   const file = e.target.files?.[0];
   if (!file) return;
 
+  // Validar tipo de arquivo
+  const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (!ALLOWED.includes(file.type)) {
+    showToast('Formato não suportado. Use JPG, PNG ou WEBP.', 'danger');
+    return;
+  }
+  // Validar tamanho (max 4MB)
+  if (file.size > 4 * 1024 * 1024) {
+    showToast('Imagem muito grande. Máximo 4 MB.', 'danger');
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = async (evt) => {
     const base64Part = evt.target.result.split(',')[1];
-    pushChatMessage('user', `[Imagem Anexada: ${file.name}]`);
+    const displayName = file.name.length > 28
+      ? file.name.slice(0, 25) + '…'
+      : file.name;
+    pushChatMessage('user', `📎 **Comprovante anexado:** ${displayName}`);
     setChatTyping(true);
 
-    const apiKey = localStorage.getItem('grokfin_anthropic_key');
-    if (apiKey && apiKey.startsWith('AIza')) {
-      try {
-        const reply = await sendGeminiImageMessage(base64Part, file.type, apiKey);
-        setChatTyping(false);
-        pushChatMessage('assistant', reply);
-      } catch (err) {
-        setChatTyping(false);
-        pushChatMessage('assistant', `⚠️ Erro ao analisar imagem: ${err.message}`);
+    const apiKey   = localStorage.getItem('grokfin_anthropic_key');
+    const provider = getAIProvider(apiKey);
+
+    try {
+      let reply;
+      if (provider === 'gemini') {
+        reply = await sendGeminiImageMessage(base64Part, file.type, apiKey);
+      } else if (provider === 'claude') {
+        reply = await sendClaudeImageMessage(base64Part, file.type, apiKey);
+      } else {
+        reply = '⚠️ Configure uma chave de API para analisar imagens.\n\n'
+          + '**Gemini** (gratuito): chave começa com `AIza` — obtenha em aistudio.google.com\n'
+          + '**Claude** (pago): chave começa com `sk-ant-` — obtenha em console.anthropic.com';
       }
-    } else {
       setChatTyping(false);
-      pushChatMessage('assistant', '⚠️ Para ler imagens, conecte uma chave **Gemini** (começa com AIza). Configure na aba Supabase/IA no login.');
+      pushChatMessage('assistant', reply);
+
+      // Se a resposta da IA sugerir um comando de registro, oferecer atalho
+      const suggestedCommand = reply.match(/[Gg]astei[^.!?]*/);
+      if (suggestedCommand) {
+        setTimeout(() => {
+          const input = document.getElementById('chat-input');
+          if (input && !input.value) {
+            input.value = suggestedCommand[0].trim();
+            input.focus();
+            showToast('💡 Sugestão preenchida — confirme ou edite antes de enviar', 'success');
+          }
+        }, 400);
+      }
+    } catch (err) {
+      setChatTyping(false);
+      pushChatMessage('assistant', `⚠️ Erro ao analisar imagem: ${err.message}`);
     }
   };
   reader.readAsDataURL(file);
+  // Limpar input para permitir reenvio da mesma imagem
+  e.target.value = '';
 }
 
 export function bindChatEvents() {
@@ -520,11 +676,9 @@ export function bindChatEvents() {
 
         recognition.onstart = () => {
           isListening = true;
-          micBtn.style.background = 'linear-gradient(135deg,#ff6685,#ff4466)';
-          micBtn.style.color = '#fff';
-          micBtn.style.border = '1px solid rgba(255,100,133,.4)';
+          micBtn.classList.add('recording');
           if (micIcon) { micIcon.className = 'fa-solid fa-stop'; }
-          micBtn.title = 'Gravando... clique para parar';
+          micBtn.title = 'Gravando… clique para parar';
         };
 
         recognition.onresult = (event) => {
@@ -533,7 +687,7 @@ export function bindChatEvents() {
             input.value = transcript;
             input.focus();
           }
-          showToast(`Gravação concluída: "${transcript.slice(0, 40)}${transcript.length > 40 ? '…' : ''}"`, 'success');
+          showToast(`🎙️ "${transcript.slice(0, 40)}${transcript.length > 40 ? '…' : ''}"`, 'success');
         };
 
         recognition.onerror = (event) => {
@@ -543,9 +697,7 @@ export function bindChatEvents() {
 
         recognition.onend = () => {
           isListening = false;
-          micBtn.style.background = '';
-          micBtn.style.color = '';
-          micBtn.style.border = '';
+          micBtn.classList.remove('recording');
           if (micIcon) { micIcon.className = 'fa-solid fa-microphone'; }
           micBtn.title = 'Gravar áudio';
         };
@@ -554,6 +706,29 @@ export function bindChatEvents() {
       });
     }
   }
+
+  // ── Botões de prompt rápido (data-chat-prompt) ────────────────────────────
+  // Os pills "Saldo", "Gastos", "Metas" e "Detalhar recomendação" existem no
+  // HTML mas nunca foram ligados a evento algum — cliques não faziam nada.
+  document.querySelectorAll('[data-chat-prompt]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const prompt = btn.dataset.chatPrompt;
+      if (prompt) sendChatPrompt(prompt);
+    });
+  });
+
+  // ── Atalhos rápidos do painel lateral (data-quick-action) ─────────────────
+  document.querySelectorAll('[data-quick-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.quickAction;
+      if (action === 'open-transactions') window.switchTab?.(2);
+      if (action === 'open-report')       window.switchTab?.(1);
+      if (action === 'apply-insight') {
+        const insight = document.getElementById('chat-side-insight')?.textContent?.trim();
+        if (insight && insight !== '--') sendChatPrompt(`Explique e aplique: ${insight}`);
+      }
+    });
+  });
 }
 
 // [FIX #6] sendChatPrompt: função para acionar o chat programaticamente.

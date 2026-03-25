@@ -16,7 +16,7 @@ import { bindGoalEvents, renderGoals } from './ui/goals-ui.js';
 import { bindCardEvents, renderCards } from './ui/cards-ui.js';
 import { bindCashflowEvents, renderCashflow } from './ui/cashflow-ui.js';
 import { bindInvestmentEvents, renderInvestments } from './ui/investments-ui.js';
-import { bindChatEvents, ensureChatSeed, renderChat } from './ui/chat-ui.js';
+import { bindChatEvents, ensureChatSeed, renderChat, getAIProvider } from './ui/chat-ui.js';
 import { bindProfileEvents, renderProfile } from './ui/profile-ui.js';
 import { renderMarketTab } from './ui/market-ui.js';
 import { calculateAnalytics, processRecurrences } from './analytics/engine.js';
@@ -102,6 +102,38 @@ async function initApp() {
   bindInvestmentEvents();
   bindChatEvents();
   bindProfileEvents();
+
+  // 3.2 Indicador de modo IA — atualiza o badge do header do chat
+  // #ai-active-indicator e #ai-mode-label ficavam estáticos; agora refletem
+  // o provedor configurado assim que o app inicializa.
+  (function updateAIIndicator() {
+    const apiKey   = localStorage.getItem('grokfin_anthropic_key');
+    const provider = getAIProvider(apiKey);
+    const indicator = document.getElementById('ai-active-indicator');
+    const modeLabel = document.getElementById('ai-mode-label');
+    const subtitle  = document.getElementById('ai-chat-subtitle');
+
+    if (provider === 'gemini') {
+      if (indicator) {
+        indicator.textContent = '✦ Gemini ativo';
+        indicator.style.display = 'inline-flex';
+        indicator.style.background = 'linear-gradient(135deg,#00f5ff,#00ff85)';
+      }
+      if (modeLabel) modeLabel.textContent = 'Gemini conectado';
+      if (subtitle)  subtitle.textContent  = 'IA Gemini ativa · Lê saldo, metas, categorias, câmbio e comprovantes';
+    } else if (provider === 'claude') {
+      if (indicator) {
+        indicator.textContent = '✦ Claude ativo';
+        indicator.style.display = 'inline-flex';
+        indicator.style.background = 'linear-gradient(135deg,#a855f7,#6366f1)';
+      }
+      if (modeLabel) modeLabel.textContent = 'Claude conectado';
+      if (subtitle)  subtitle.textContent  = 'IA Claude ativa · Lê saldo, metas, categorias, câmbio e comprovantes';
+    } else {
+      if (indicator) indicator.style.display = 'none';
+      if (modeLabel) modeLabel.textContent = 'Modo básico';
+    }
+  })();
 
   // 3.1 Garante a mensagem de boas-vindas no chat
   // [FIX] ensureChatSeed nunca era chamado — chat abria vazio para novos usuários

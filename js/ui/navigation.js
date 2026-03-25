@@ -29,7 +29,8 @@ export function syncActiveViewLabel(index = 0) {
 
   const dot = document.getElementById('mais-active-dot');
   const maisBtn = document.getElementById('mais-btn');
-  const isMoreTab = index >= 6 && index <= 8;
+  // Tabs 5–9 não têm botão próprio → "Mais" deve ficar ativo para todas elas
+  const isMoreTab = index >= 5 && index <= 9;
   if (dot && maisBtn) {
     if (isMoreTab) {
       dot.classList.remove('hidden');
@@ -72,9 +73,10 @@ export function switchTab(index, { force = false, skipHistory = false } = {}) {
     link.classList.toggle('active', parseInt(link.dataset.tab) === target);
   });
 
-  // [FIX #4] Atualizar bottom nav (Mobile): classe correta é 'bottom-nav-button',
-  // não 'bottom-nav-btn' como estava — causava highlight do bottom nav nunca atualizar.
-  const legacyIdx = {0:0, 1:1, 2:2, 3:3, 4:4, 5:4, 6:1, 7:1, 8:1}[target] || 0;
+  // [FIX legacyIdx] Mapeamento corrigido: tabs 5-9 não têm botão próprio no bottom nav
+  // → destacam o botão "Mais" (índice 5). Antes, tabs 5-8 incorretamente
+  // destacavam "Metas" (4) ou "Análise" (1), desorientando o usuário mobile.
+  const legacyIdx = { 0:0, 1:1, 2:2, 3:3, 4:4, 5:5, 6:5, 7:5, 8:5, 9:5 }[target] ?? 0;
   document.querySelectorAll('.bottom-nav-button').forEach((btn, i) => {
     const icon = btn.querySelector('i');
     if (!icon) return;
@@ -121,11 +123,15 @@ export function openMaisSheet() {
   if (!sheet || !panel) return;
   sheet.classList.remove('hidden');
   requestAnimationFrame(() => { panel.style.transform = 'translateY(0)'; });
-  
+
+  // Usar classe CSS em vez de inline style — evita conflito de especificidade
+  // com .mais-tab-btn[data-tab].active definido em nav.css
   document.querySelectorAll('.mais-tab-btn').forEach(btn => {
     const t = Number(btn.dataset.tab);
-    btn.style.borderColor = t === state.ui.activeTab ? 'rgba(0,245,255,.3)' : '';
-    btn.style.background = t === state.ui.activeTab ? 'rgba(0,245,255,.08)' : '';
+    btn.classList.toggle('active', t === state.ui.activeTab);
+    // Limpar inline styles residuais de versões anteriores
+    btn.style.borderColor = '';
+    btn.style.background  = '';
   });
 }
 
@@ -135,6 +141,41 @@ export function closeMaisSheet() {
   if (!sheet || !panel) return;
   panel.style.transform = 'translateY(100%)';
   setTimeout(() => sheet.classList.add('hidden'), 290);
+}
+
+// ── Swipe-to-close no mais-sheet (padrão iOS/Android esperado pelo usuário) ──
+export function bindMaisSheetSwipe() {
+  const panel = document.getElementById('mais-sheet-panel');
+  if (!panel) return;
+
+  let startY = 0;
+  let currentY = 0;
+  let isDragging = false;
+
+  panel.addEventListener('touchstart', (e) => {
+    startY = e.touches[0].clientY;
+    isDragging = true;
+    panel.style.transition = 'none'; // desativa transição durante drag
+  }, { passive: true });
+
+  panel.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    currentY = e.touches[0].clientY;
+    const delta = Math.max(0, currentY - startY); // só deslizar para baixo
+    panel.style.transform = `translateY(${delta}px)`;
+  }, { passive: true });
+
+  panel.addEventListener('touchend', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    panel.style.transition = ''; // restaura transição CSS
+    const delta = currentY - startY;
+    if (delta > 80) {
+      closeMaisSheet(); // threshold de 80px para fechar
+    } else {
+      panel.style.transform = 'translateY(0)'; // snap back
+    }
+  });
 }
 
 export function bindNavigationEvents() {
@@ -168,6 +209,9 @@ export function bindNavigationEvents() {
       closeMaisSheet();
     });
   });
+
+  // Ativar swipe-to-close no painel "Mais"
+  bindMaisSheetSwipe();
 }
 
 // [FIX #3] Expor funções de navegação no escopo global (window).
