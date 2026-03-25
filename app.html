@@ -391,6 +391,28 @@
 </div>
 </div>
 
+<!-- ─── Calendário Financeiro ─── -->
+<div class="col-span-12 fin-cal" id="fin-calendar-widget">
+  <div class="fin-cal-header">
+    <p class="fin-cal-title"><i class="fa-regular fa-calendar-days text-cyan-400 mr-2"></i>Calendário Financeiro</p>
+    <div class="fin-cal-nav">
+      <button class="fin-cal-nav-btn" id="fin-cal-prev" title="Mês anterior"><i class="fa-solid fa-chevron-left"></i></button>
+      <span class="fin-cal-month-label" id="fin-cal-month-label">Março 2026</span>
+      <button class="fin-cal-nav-btn" id="fin-cal-next" title="Próximo mês"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+  </div>
+  <div class="fin-cal-weekdays">
+    <span class="fin-cal-weekday">Dom</span>
+    <span class="fin-cal-weekday">Seg</span>
+    <span class="fin-cal-weekday">Ter</span>
+    <span class="fin-cal-weekday">Qua</span>
+    <span class="fin-cal-weekday">Qui</span>
+    <span class="fin-cal-weekday">Sex</span>
+    <span class="fin-cal-weekday">Sáb</span>
+  </div>
+  <div class="fin-cal-grid" id="fin-cal-grid"></div>
+</div>
+
         </div>
 
         <div id="tab-1" class="tab-panel space-y-10">
@@ -1072,37 +1094,35 @@
     </div>
   </div>
 
-  <nav class="bottom-nav fixed inset-x-0 bottom-0 z-40 lg:hidden">
-      <div class="mx-auto flex max-w-4xl items-center justify-between px-2">
-        <button data-tab="0" class="bottom-nav-button active">
-          <span class="bottom-nav-icon"><i class="fa-solid fa-house"></i></span>
-          <span>Home</span>
-        </button>
-        <button data-tab="1" class="bottom-nav-button">
-          <span class="bottom-nav-icon"><i class="fa-solid fa-chart-pie"></i></span>
-          <span>Análise</span>
-        </button>
-        <button data-tab="2" class="bottom-nav-button">
-          <span class="bottom-nav-icon"><i class="fa-solid fa-wallet"></i></span>
-          <span>Conta</span>
-        </button>
-        <button data-tab="3" class="bottom-nav-button">
-          <span class="bottom-nav-icon"><i class="fa-solid fa-robot"></i></span>
-          <span>Chat</span>
-        </button>
-        <button data-tab="4" class="bottom-nav-button">
-          <span class="bottom-nav-icon"><i class="fa-solid fa-bullseye"></i></span>
-          <span>Metas</span>
-        </button>
-        <button id="mais-btn" class="bottom-nav-button" onclick="openMaisSheet()">
-          <span class="bottom-nav-icon" style="position:relative">
-            <i class="fa-solid fa-ellipsis"></i>
-            <span id="mais-active-dot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-[#0a0d16]" style="background:#00f5ff"></span>
-          </span>
-          <span>Mais</span>
+  <nav class="bottom-nav fixed inset-x-0 bottom-0 z-40 lg:hidden" id="bottom-nav-bar">
+    <div class="bottom-nav-grid mx-auto max-w-4xl px-2">
+      <!-- Esquerda 1: Home -->
+      <button data-tab="0" class="bottom-nav-button active">
+        <span class="bottom-nav-icon"><i class="fa-solid fa-house"></i></span>
+      </button>
+      <!-- Esquerda 2: Contas -->
+      <button data-tab="2" class="bottom-nav-button">
+        <span class="bottom-nav-icon"><i class="fa-solid fa-wallet"></i></span>
+      </button>
+      <!-- Centro: Botão + Nova Transação (flutuante) -->
+      <div class="bottom-nav-fab-wrapper">
+        <button id="bottom-nav-fab" class="bottom-nav-fab" onclick="document.getElementById('open-tx-modal-btn')?.click()">
+          <i class="fa-solid fa-plus"></i>
         </button>
       </div>
-    </nav>
+      <!-- Direita 1: Metas -->
+      <button data-tab="4" class="bottom-nav-button">
+        <span class="bottom-nav-icon"><i class="fa-solid fa-bullseye"></i></span>
+      </button>
+      <!-- Direita 2: Mais -->
+      <button id="mais-btn" class="bottom-nav-button" onclick="openMaisSheet()">
+        <span class="bottom-nav-icon" style="position:relative">
+          <i class="fa-solid fa-ellipsis"></i>
+          <span id="mais-active-dot" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-[#0a0d16]" style="background:#00f5ff"></span>
+        </span>
+      </button>
+    </div>
+  </nav>
   </div>
 
   <!-- ─── Transaction Modal (Add / Edit) ─── -->
@@ -1110,6 +1130,7 @@
        style="background:rgba(0,0,0,.65);backdrop-filter:blur(6px)">
     <div class="w-full max-w-md rounded-[24px] border border-white/10 p-0 overflow-hidden shadow-2xl"
          style="background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.04))">
+      <!-- Modal header -->
       <div class="flex items-center justify-between px-6 py-5 border-b border-white/8">
         <div class="flex items-center gap-3">
           <h3 class="text-lg font-bold text-white tracking-tight" id="tx-modal-title">Nova Transação</h3>
@@ -1123,12 +1144,38 @@
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      <div class="px-6 py-5 flex flex-col gap-4">
-        <!-- Date -->
+
+      <!-- ── Tipo: Abas Entrada / Saída (logo abaixo do cabeçalho) ── -->
+      <div class="px-6 pt-4 pb-0">
+        <div class="tx-type-tabs" id="tx-type-tabs">
+          <button type="button" class="tx-type-tab tx-type-tab--entrada" data-type="entrada" id="tx-tab-entrada">
+            <i class="fa-solid fa-arrow-down-to-line"></i> Entrada
+          </button>
+          <button type="button" class="tx-type-tab tx-type-tab--saida active" data-type="saida" id="tx-tab-saida">
+            <i class="fa-solid fa-arrow-up-from-line"></i> Saída
+          </button>
+        </div>
+        <!-- Hidden select mantido para compatibilidade com JS existente -->
+        <select id="tx-modal-type" class="hidden">
+          <option value="saida" selected>Saída</option>
+          <option value="entrada">Entrada</option>
+        </select>
+      </div>
+
+      <div class="px-6 py-5 flex flex-col gap-4" style="max-height:72vh;overflow-y:auto">
+        <!-- Date with date picker -->
         <div class="flex flex-col gap-1">
           <label class="text-xs font-semibold uppercase tracking-widest text-white/40">Data</label>
-          <input id="tx-modal-date" type="text" placeholder="DD/MM/AAAA" maxlength="10" inputmode="numeric"
-                 class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/50 focus:bg-white/8 transition-colors placeholder:text-white/25"/>
+          <div class="tx-date-wrapper">
+            <input id="tx-modal-date" type="text" placeholder="DD/MM/AAAA" maxlength="10" inputmode="numeric"
+                   autocomplete="off"
+                   class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 pr-12 text-sm text-white outline-none focus:border-cyan-400/50 focus:bg-white/8 transition-colors placeholder:text-white/25 w-full"/>
+            <button type="button" id="tx-date-picker-btn" class="tx-date-picker-btn" title="Abrir calendário">
+              <i class="fa-regular fa-calendar"></i>
+            </button>
+            <!-- Native date input hidden — drives the picker -->
+            <input type="date" id="tx-modal-date-native" class="tx-date-native" />
+          </div>
         </div>
         <!-- Description -->
         <div class="flex flex-col gap-1">
@@ -1154,22 +1201,11 @@
             <option value="Transporte">Transporte</option>
           </select>
         </div>
-        <!-- Type and Value -->
-        <div class="grid grid-cols-2 gap-3">
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-semibold uppercase tracking-widest text-white/40">Tipo</label>
-            <select id="tx-modal-type"
-                    class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/50 transition-colors"
-                    style="background-color:rgba(255,255,255,.05)">
-              <option value="saida">Saída</option>
-              <option value="entrada">Entrada</option>
-            </select>
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-semibold uppercase tracking-widest text-white/40">Valor (R$)</label>
-            <input id="tx-modal-value" type="text" placeholder="0,00"
-                   class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/50 focus:bg-white/8 transition-colors placeholder:text-white/25"/>
-          </div>
+        <!-- Value (full width, since type moved to tabs) -->
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold uppercase tracking-widest text-white/40">Valor (R$)</label>
+          <input id="tx-modal-value" type="text" placeholder="0,00"
+                 class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/50 focus:bg-white/8 transition-colors placeholder:text-white/25"/>
         </div>
 
         <!-- Payment method — shown only for Saída -->
@@ -1212,13 +1248,41 @@
             <div class="w-11 h-6 rounded-full border border-white/15 bg-white/10 peer-checked:bg-gradient-to-r peer-checked:from-violet-500 peer-checked:to-cyan-500 transition-all after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:bg-white after:rounded-full after:transition-all peer-checked:after:translate-x-5"></div>
           </label>
         </div>
-        <!-- [FIX #3] Campo de parcelas adicionado (existia no JS mas não no HTML) -->
+        <!-- Campo de parcelas -->
         <div class="flex flex-col gap-1" id="tx-split-section">
           <label class="text-xs font-semibold uppercase tracking-widest text-white/40">Parcelas (opcional)</label>
           <input id="tx-modal-split" type="number" min="1" max="24" placeholder="1 = à vista"
                  class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/50 focus:bg-white/8 transition-colors placeholder:text-white/25"/>
           <p class="text-xs text-white/35 px-1"><i class="fa-solid fa-circle-info mr-1"></i>Para compras parceladas no cartão de crédito.</p>
         </div>
+
+        <!-- ── Botão Mais detalhes / Menos detalhes ── -->
+        <div>
+          <button type="button" id="tx-more-details-btn" class="tx-more-details-btn">
+            Mais detalhes <span id="tx-more-details-arrow">›</span>
+          </button>
+          <!-- Área expansível -->
+          <div id="tx-more-details-area" class="tx-more-details-area">
+            <!-- Observações -->
+            <div class="flex flex-col gap-1 mt-4">
+              <label class="text-xs font-semibold uppercase tracking-widest text-white/40">Observações</label>
+              <textarea id="tx-modal-notes" rows="3" placeholder="Informações adicionais sobre esta transação..."
+                        class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/50 focus:bg-white/8 transition-colors placeholder:text-white/25 resize-none"></textarea>
+            </div>
+            <!-- Anexos -->
+            <div class="flex flex-col gap-2 mt-3">
+              <label class="text-xs font-semibold uppercase tracking-widest text-white/40">Anexos</label>
+              <label class="tx-file-upload-label" for="tx-modal-attachment">
+                <i class="fa-solid fa-paperclip text-cyan-400/70"></i>
+                <span id="tx-attachment-name" class="text-white/50 text-sm">Clique para anexar imagem ou PDF</span>
+              </label>
+              <input type="file" id="tx-modal-attachment" accept="image/*,.pdf" class="hidden"
+                     onchange="document.getElementById('tx-attachment-name').textContent = this.files[0]?.name || 'Clique para anexar imagem ou PDF'" />
+              <p class="text-xs text-white/30 px-1">Aceita: imagens (JPG, PNG, WEBP) e arquivos PDF.</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Error message -->
         <p id="tx-modal-error" class="hidden text-xs text-rose-400 font-semibold px-1"></p>
       </div>
@@ -1593,6 +1657,306 @@
   <div id="toast-container" class="fixed bottom-24 right-4 z-50 flex w-[min(92vw,420px)] flex-col gap-3 lg:bottom-5 lg:right-5" aria-live="polite" aria-atomic="false"></div>
   <!-- Módulos ES6 (migração incremental) -->
   <script type="module" src="./js/app.js"></script>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       NOVOS COMPONENTES — inline script (não-módulo para acesso global)
+       ═══════════════════════════════════════════════════════════════ -->
+  <script>
+  /* ────────────────────────────────────────────────────────────────
+     1. MODAL — Tipo Abas (Entrada / Saída)
+     ──────────────────────────────────────────────────────────────── */
+  (function initTxTypeTabs() {
+    function setup() {
+      const tabEntrada = document.getElementById('tx-tab-entrada');
+      const tabSaida   = document.getElementById('tx-tab-saida');
+      const selType    = document.getElementById('tx-modal-type');
+      const paySection = document.getElementById('tx-payment-section');
+
+      if (!tabEntrada || !tabSaida || !selType) return;
+
+      function setType(type) {
+        selType.value = type;
+        // Sincroniza aparência das abas
+        tabEntrada.classList.toggle('active', type === 'entrada');
+        tabSaida.classList.toggle('active',   type === 'saida');
+        // Mostra/oculta seção de pagamento (só para saída)
+        if (paySection) {
+          paySection.style.display = type === 'saida' ? '' : 'none';
+        }
+        // Dispara evento change para que o JS existente reaja
+        selType.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      tabEntrada.addEventListener('click', () => setType('entrada'));
+      tabSaida.addEventListener('click',   () => setType('saida'));
+
+      // Observa mudanças externas no select (ex: ao abrir modal de edição)
+      selType.addEventListener('change', () => {
+        const v = selType.value;
+        tabEntrada.classList.toggle('active', v === 'entrada');
+        tabSaida.classList.toggle('active',   v === 'saida');
+      });
+
+      // Estado inicial
+      setType(selType.value || 'saida');
+    }
+
+    // O modal pode não estar no DOM ainda na carga; usar MutationObserver
+    if (document.getElementById('tx-tab-entrada')) {
+      setup();
+    } else {
+      const obs = new MutationObserver(() => {
+        if (document.getElementById('tx-tab-entrada')) { obs.disconnect(); setup(); }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+    }
+  })();
+
+  /* ────────────────────────────────────────────────────────────────
+     2. MODAL — Date Picker (calendar button → native input)
+     ──────────────────────────────────────────────────────────────── */
+  (function initDatePicker() {
+    function setup() {
+      const btn    = document.getElementById('tx-date-picker-btn');
+      const native = document.getElementById('tx-modal-date-native');
+      const text   = document.getElementById('tx-modal-date');
+      if (!btn || !native || !text) return;
+
+      // Abrir o picker nativo ao clicar no ícone
+      btn.addEventListener('click', () => {
+        native.showPicker ? native.showPicker() : native.click();
+      });
+
+      // Quando o picker nativo muda, formata DD/MM/AAAA no campo de texto
+      native.addEventListener('change', () => {
+        if (!native.value) return;
+        const [y, m, d] = native.value.split('-');
+        text.value = `${d}/${m}/${y}`;
+        // Mantém sincronia reversa caso o JS existente leia o campo texto
+        text.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+
+      // Sincronia reversa: ao digitar manualmente no campo texto,
+      // atualiza o input nativo (para consistência visual)
+      text.addEventListener('input', () => {
+        const parts = text.value.split('/');
+        if (parts.length === 3 && parts[2].length === 4) {
+          const iso = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+          native.value = iso;
+        }
+      });
+    }
+
+    if (document.getElementById('tx-date-picker-btn')) {
+      setup();
+    } else {
+      const obs = new MutationObserver(() => {
+        if (document.getElementById('tx-date-picker-btn')) { obs.disconnect(); setup(); }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+    }
+  })();
+
+  /* ────────────────────────────────────────────────────────────────
+     3. MODAL — "Mais detalhes / Menos detalhes"
+     ──────────────────────────────────────────────────────────────── */
+  (function initMoreDetails() {
+    function setup() {
+      const btn   = document.getElementById('tx-more-details-btn');
+      const area  = document.getElementById('tx-more-details-area');
+      const arrow = document.getElementById('tx-more-details-arrow');
+      if (!btn || !area) return;
+
+      let open = false;
+      btn.addEventListener('click', () => {
+        open = !open;
+        area.classList.toggle('open', open);
+        if (arrow) arrow.textContent = open ? '∧' : '›';
+        btn.textContent = '';
+        if (arrow) btn.appendChild(arrow);
+        btn.insertAdjacentText('afterbegin', open ? 'Menos detalhes ' : 'Mais detalhes ');
+      });
+    }
+
+    if (document.getElementById('tx-more-details-btn')) {
+      setup();
+    } else {
+      const obs = new MutationObserver(() => {
+        if (document.getElementById('tx-more-details-btn')) { obs.disconnect(); setup(); }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+    }
+  })();
+
+  /* ────────────────────────────────────────────────────────────────
+     4. CALENDÁRIO FINANCEIRO — Home Tab
+     ──────────────────────────────────────────────────────────────── */
+  (function initFinancialCalendar() {
+
+    /* ── Mock data de transações ── */
+    const MOCK_TRANSACTIONS = [
+      { data: '2026-03-01', tipo: 'entrada', valor: 4500.00 },
+      { data: '2026-03-03', tipo: 'saida',   valor: 120.50 },
+      { data: '2026-03-05', tipo: 'saida',   valor: 89.90 },
+      { data: '2026-03-05', tipo: 'entrada', valor: 350.00 },
+      { data: '2026-03-08', tipo: 'saida',   valor: 210.00 },
+      { data: '2026-03-10', tipo: 'saida',   valor: 67.80 },
+      { data: '2026-03-12', tipo: 'entrada', valor: 596.40 },
+      { data: '2026-03-12', tipo: 'saida',   valor: 525.90 },
+      { data: '2026-03-15', tipo: 'saida',   valor: 1200.00 },
+      { data: '2026-03-15', tipo: 'saida',   valor: 44.99 },
+      { data: '2026-03-18', tipo: 'saida',   valor: 33.00 },
+      { data: '2026-03-19', tipo: 'entrada', valor: 800.00 },
+      { data: '2026-03-20', tipo: 'saida',   valor: 156.70 },
+      { data: '2026-03-22', tipo: 'saida',   valor: 78.40 },
+      { data: '2026-03-24', tipo: 'entrada', valor: 250.00 },
+      { data: '2026-03-24', tipo: 'saida',   valor: 95.00 },
+      { data: '2026-03-26', tipo: 'saida',   valor: 310.00 },
+      { data: '2026-03-28', tipo: 'entrada', valor: 1200.00 },
+      { data: '2026-03-29', tipo: 'saida',   valor: 42.50 },
+      { data: '2026-03-31', tipo: 'saida',   valor: 88.00 },
+      // Abril
+      { data: '2026-04-01', tipo: 'entrada', valor: 4500.00 },
+      { data: '2026-04-02', tipo: 'saida',   valor: 130.00 },
+      { data: '2026-04-05', tipo: 'saida',   valor: 210.00 },
+      { data: '2026-04-07', tipo: 'entrada', valor: 420.00 },
+      { data: '2026-04-10', tipo: 'saida',   valor: 890.00 },
+      { data: '2026-04-14', tipo: 'saida',   valor: 55.90 },
+      { data: '2026-04-15', tipo: 'saida',   valor: 1200.00 },
+      { data: '2026-04-18', tipo: 'entrada', valor: 600.00 },
+      { data: '2026-04-22', tipo: 'saida',   valor: 120.00 },
+      { data: '2026-04-25', tipo: 'entrada', valor: 300.00 },
+      // Fevereiro
+      { data: '2026-02-03', tipo: 'entrada', valor: 4500.00 },
+      { data: '2026-02-05', tipo: 'saida',   valor: 198.00 },
+      { data: '2026-02-10', tipo: 'saida',   valor: 67.00 },
+      { data: '2026-02-14', tipo: 'entrada', valor: 280.00 },
+      { data: '2026-02-20', tipo: 'saida',   valor: 1200.00 },
+      { data: '2026-02-25', tipo: 'saida',   valor: 55.00 },
+      { data: '2026-02-28', tipo: 'entrada', valor: 150.00 },
+    ];
+
+    /* ── Agrupa transações por data (YYYY-MM-DD) ── */
+    function buildDayMap(transactions) {
+      const map = {};
+      transactions.forEach(tx => {
+        if (!map[tx.data]) map[tx.data] = { entrada: 0, saida: 0 };
+        map[tx.data][tx.tipo] += tx.valor;
+      });
+      return map;
+    }
+
+    /* ── Formata moeda compacta (R$ 1.200 → "1,2k") ── */
+    function fmtCompact(val) {
+      if (val >= 1000) return 'R$ ' + (val/1000).toFixed(1).replace('.',',') + 'k';
+      return 'R$ ' + val.toFixed(2).replace('.',',');
+    }
+
+    /* ── Renderiza o grid do calendário ── */
+    function renderCalendar(year, month) {
+      const grid  = document.getElementById('fin-cal-grid');
+      const label = document.getElementById('fin-cal-month-label');
+      if (!grid || !label) return;
+
+      const today = new Date();
+      const firstDay = new Date(year, month, 1);
+      const lastDay  = new Date(year, month + 1, 0);
+      const startDow = firstDay.getDay(); // 0 = Dom
+      const daysInMonth = lastDay.getDate();
+
+      // Rótulo
+      const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                          'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+      label.textContent = `${monthNames[month]} ${year}`;
+
+      // Dia map para esse mês (e meses adjacentes presentes)
+      const dayMap = buildDayMap(MOCK_TRANSACTIONS);
+
+      grid.innerHTML = '';
+
+      // Dias do mês anterior (fill start)
+      const prevLastDay = new Date(year, month, 0).getDate();
+      for (let i = startDow - 1; i >= 0; i--) {
+        const d = prevLastDay - i;
+        const cell = document.createElement('div');
+        cell.className = 'fin-cal-day other-month';
+        cell.innerHTML = `<span class="fin-cal-day-num">${d}</span>`;
+        grid.appendChild(cell);
+      }
+
+      // Dias do mês atual
+      for (let d = 1; d <= daysInMonth; d++) {
+        const mm = String(month + 1).padStart(2, '0');
+        const dd = String(d).padStart(2, '0');
+        const key = `${year}-${mm}-${dd}`;
+        const isToday = (d === today.getDate() && month === today.getMonth() && year === today.getFullYear());
+
+        const cell = document.createElement('div');
+        cell.className = 'fin-cal-day' + (isToday ? ' today' : '');
+
+        let html = `<span class="fin-cal-day-num">${d}</span>`;
+
+        if (dayMap[key]) {
+          const { entrada, saida } = dayMap[key];
+          if (entrada > 0) {
+            html += `<span class="fin-cal-tag fin-cal-tag--in">+${fmtCompact(entrada)}</span>`;
+          }
+          if (saida > 0) {
+            html += `<span class="fin-cal-tag fin-cal-tag--out">-${fmtCompact(saida)}</span>`;
+          }
+        }
+
+        cell.innerHTML = html;
+        grid.appendChild(cell);
+      }
+
+      // Dias do próximo mês (fill end — até completar 6 linhas se necessário)
+      const totalCells = grid.children.length;
+      const remaining  = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+      for (let d = 1; d <= remaining; d++) {
+        const cell = document.createElement('div');
+        cell.className = 'fin-cal-day other-month';
+        cell.innerHTML = `<span class="fin-cal-day-num">${d}</span>`;
+        grid.appendChild(cell);
+      }
+    }
+
+    /* ── Estado e event listeners ── */
+    function setup() {
+      const prevBtn = document.getElementById('fin-cal-prev');
+      const nextBtn = document.getElementById('fin-cal-next');
+      if (!prevBtn || !nextBtn) return;
+
+      const now = new Date();
+      let curYear  = now.getFullYear();
+      let curMonth = now.getMonth();
+
+      renderCalendar(curYear, curMonth);
+
+      prevBtn.addEventListener('click', () => {
+        curMonth--;
+        if (curMonth < 0) { curMonth = 11; curYear--; }
+        renderCalendar(curYear, curMonth);
+      });
+
+      nextBtn.addEventListener('click', () => {
+        curMonth++;
+        if (curMonth > 11) { curMonth = 0; curYear++; }
+        renderCalendar(curYear, curMonth);
+      });
+    }
+
+    if (document.getElementById('fin-cal-grid')) {
+      setup();
+    } else {
+      const obs = new MutationObserver(() => {
+        if (document.getElementById('fin-cal-grid')) { obs.disconnect(); setup(); }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+    }
+
+  })();
+  </script>
 
 </body>
 </html>

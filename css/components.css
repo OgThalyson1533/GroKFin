@@ -158,3 +158,285 @@
 
 /* ── Payment badge extra: débito ──────────────────────────────────────────*/
 .payment-badge-debito { background: rgba(250,204,21,.10); border: 1px solid rgba(250,204,21,.20); color: #fde784; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NOVOS COMPONENTES — Barra, Modal, Calendário Financeiro
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tipo abas (Entrada / Saída) no modal ─────────────────────────────── */
+.tx-type-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .35rem;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 1rem;
+  padding: .28rem;
+}
+
+.tx-type-tab {
+  display: flex; align-items: center; justify-content: center;
+  gap: .45rem;
+  padding: .62rem 1rem;
+  border-radius: .75rem;
+  font-size: .82rem; font-weight: 700; letter-spacing: .03em;
+  border: 1px solid transparent;
+  color: rgba(255,255,255,.45);
+  background: transparent;
+  transition: all .22s ease;
+  cursor: pointer;
+}
+
+.tx-type-tab--entrada.active {
+  background: rgba(52,211,153,.12);
+  border-color: rgba(52,211,153,.28);
+  color: #6ee7b7;
+  box-shadow: 0 2px 16px rgba(52,211,153,.12);
+}
+
+.tx-type-tab--saida.active {
+  background: rgba(251,113,133,.12);
+  border-color: rgba(251,113,133,.28);
+  color: #fda4af;
+  box-shadow: 0 2px 16px rgba(251,113,133,.12);
+}
+
+.tx-type-tab:hover:not(.active) {
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.72);
+}
+
+/* ── Date picker wrapper ──────────────────────────────────────────────── */
+.tx-date-wrapper {
+  position: relative;
+}
+
+.tx-date-picker-btn {
+  position: absolute;
+  right: .75rem; top: 50%;
+  transform: translateY(-50%);
+  width: 2rem; height: 2rem;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: .6rem;
+  background: rgba(0,245,255,.08);
+  border: 1px solid rgba(0,245,255,.16);
+  color: rgba(0,245,255,.7);
+  font-size: .85rem;
+  transition: all .2s ease;
+  cursor: pointer;
+}
+
+.tx-date-picker-btn:hover {
+  background: rgba(0,245,255,.15);
+  color: #00f5ff;
+}
+
+/* Ocultar o input nativo mas mantê-lo clicável via JS */
+.tx-date-native {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 1px; height: 1px;
+  top: 0; left: 0;
+}
+
+/* ── Botão "Mais detalhes" ────────────────────────────────────────────── */
+.tx-more-details-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: rgba(0,245,255,.65);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: .3rem 0;
+  transition: color .2s ease;
+  text-transform: uppercase;
+}
+
+.tx-more-details-btn:hover { color: #00f5ff; }
+
+/* Área expansível com animação */
+.tx-more-details-area {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height .38s cubic-bezier(.4,0,.2,1), opacity .28s ease;
+}
+
+.tx-more-details-area.open {
+  max-height: 400px;
+  opacity: 1;
+}
+
+/* ── File upload label estilizado ─────────────────────────────────────── */
+.tx-file-upload-label {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .75rem 1rem;
+  border-radius: 1rem;
+  border: 1.5px dashed rgba(0,245,255,.2);
+  background: rgba(0,245,255,.04);
+  cursor: pointer;
+  transition: all .22s ease;
+}
+
+.tx-file-upload-label:hover {
+  border-color: rgba(0,245,255,.4);
+  background: rgba(0,245,255,.08);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CALENDÁRIO FINANCEIRO — Home Tab
+   ══════════════════════════════════════════════════════════════════════════ */
+.fin-cal {
+  background: rgba(255,255,255,.035);
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 1.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 8px 40px rgba(0,0,0,.2);
+}
+
+.fin-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.fin-cal-title {
+  font-size: .95rem;
+  font-weight: 700;
+  color: #e2fbff;
+  letter-spacing: .02em;
+}
+
+.fin-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.fin-cal-nav-btn {
+  width: 2rem; height: 2rem;
+  border-radius: .6rem;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.05);
+  color: rgba(255,255,255,.6);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .75rem;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.fin-cal-nav-btn:hover {
+  background: rgba(255,255,255,.1);
+  color: white;
+  border-color: rgba(0,245,255,.3);
+}
+
+.fin-cal-month-label {
+  font-size: .82rem;
+  font-weight: 700;
+  color: rgba(255,255,255,.75);
+  min-width: 7.5rem;
+  text-align: center;
+  letter-spacing: .03em;
+  text-transform: capitalize;
+}
+
+/* Cabeçalho dias da semana */
+.fin-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: .4rem;
+}
+
+.fin-cal-weekday {
+  text-align: center;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.28);
+  padding: .3rem 0;
+}
+
+/* Grade de dias */
+.fin-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.fin-cal-day {
+  min-height: 4.2rem;
+  border-radius: .75rem;
+  padding: .4rem .3rem .3rem;
+  display: flex;
+  flex-direction: column;
+  gap: .18rem;
+  border: 1px solid transparent;
+  transition: background .18s ease, border-color .18s ease;
+  cursor: default;
+  position: relative;
+}
+
+.fin-cal-day:hover {
+  background: rgba(255,255,255,.04);
+  border-color: rgba(255,255,255,.06);
+}
+
+.fin-cal-day.today {
+  background: rgba(0,245,255,.06);
+  border-color: rgba(0,245,255,.22);
+}
+
+.fin-cal-day.other-month {
+  opacity: .32;
+}
+
+.fin-cal-day-num {
+  font-size: .72rem;
+  font-weight: 700;
+  color: rgba(255,255,255,.65);
+  line-height: 1;
+  padding-left: .1rem;
+}
+
+.fin-cal-day.today .fin-cal-day-num {
+  color: #00f5ff;
+}
+
+/* Tags de valor */
+.fin-cal-tag {
+  font-size: .58rem;
+  font-weight: 700;
+  border-radius: .4rem;
+  padding: .12rem .28rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fin-cal-tag--in {
+  background: rgba(52,211,153,.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(52,211,153,.2);
+}
+
+.fin-cal-tag--out {
+  background: rgba(251,113,133,.15);
+  color: #fda4af;
+  border: 1px solid rgba(251,113,133,.2);
+}
+
+/* Responsive: telas pequenas reduz min-height */
+@media (max-width: 400px) {
+  .fin-cal-day { min-height: 3.4rem; padding: .3rem .15rem .2rem; }
+  .fin-cal-tag { font-size: .52rem; }
+}

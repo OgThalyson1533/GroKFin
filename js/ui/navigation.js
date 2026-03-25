@@ -73,10 +73,11 @@ export function switchTab(index, { force = false, skipHistory = false } = {}) {
     link.classList.toggle('active', parseInt(link.dataset.tab) === target);
   });
 
-  // [FIX legacyIdx] Mapeamento corrigido: tabs 5-9 não têm botão próprio no bottom nav
-  // → destacam o botão "Mais" (índice 5). Antes, tabs 5-8 incorretamente
-  // destacavam "Metas" (4) ou "Análise" (1), desorientando o usuário mobile.
-  const legacyIdx = { 0:0, 1:1, 2:2, 3:3, 4:4, 5:5, 6:5, 7:5, 8:5, 9:5 }[target] ?? 0;
+  // Mapeamento corrigido para o novo bottom-nav de 4 botões (Home, Contas, Metas, Mais)
+  // Os botões existentes no grid são: índice 0=Home(tab0), 1=Contas(tab2), 2=Metas(tab4), 3=Mais(tabs5-9)
+  // Tabs sem botão próprio → destacam "Mais"
+  const legacyTabToBtn = { 0:0, 1:3, 2:1, 3:3, 4:2, 5:3, 6:3, 7:3, 8:3, 9:3 };
+  const legacyIdx = legacyTabToBtn[target] ?? 3;
   document.querySelectorAll('.bottom-nav-button').forEach((btn, i) => {
     const icon = btn.querySelector('i');
     if (!icon) return;
