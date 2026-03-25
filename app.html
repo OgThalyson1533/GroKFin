@@ -1106,7 +1106,7 @@
       </button>
       <!-- Centro: Botão + Nova Transação (flutuante) -->
       <div class="bottom-nav-fab-wrapper">
-        <button id="bottom-nav-fab" class="bottom-nav-fab" onclick="document.getElementById('open-tx-modal-btn')?.click()">
+        <button id="bottom-nav-fab" class="bottom-nav-fab" onclick="document.getElementById('tx-add-btn')?.click()">
           <i class="fa-solid fa-plus"></i>
         </button>
       </div>
@@ -1793,55 +1793,30 @@
      ──────────────────────────────────────────────────────────────── */
   (function initFinancialCalendar() {
 
-    /* ── Mock data de transações ── */
-    const MOCK_TRANSACTIONS = [
-      { data: '2026-03-01', tipo: 'entrada', valor: 4500.00 },
-      { data: '2026-03-03', tipo: 'saida',   valor: 120.50 },
-      { data: '2026-03-05', tipo: 'saida',   valor: 89.90 },
-      { data: '2026-03-05', tipo: 'entrada', valor: 350.00 },
-      { data: '2026-03-08', tipo: 'saida',   valor: 210.00 },
-      { data: '2026-03-10', tipo: 'saida',   valor: 67.80 },
-      { data: '2026-03-12', tipo: 'entrada', valor: 596.40 },
-      { data: '2026-03-12', tipo: 'saida',   valor: 525.90 },
-      { data: '2026-03-15', tipo: 'saida',   valor: 1200.00 },
-      { data: '2026-03-15', tipo: 'saida',   valor: 44.99 },
-      { data: '2026-03-18', tipo: 'saida',   valor: 33.00 },
-      { data: '2026-03-19', tipo: 'entrada', valor: 800.00 },
-      { data: '2026-03-20', tipo: 'saida',   valor: 156.70 },
-      { data: '2026-03-22', tipo: 'saida',   valor: 78.40 },
-      { data: '2026-03-24', tipo: 'entrada', valor: 250.00 },
-      { data: '2026-03-24', tipo: 'saida',   valor: 95.00 },
-      { data: '2026-03-26', tipo: 'saida',   valor: 310.00 },
-      { data: '2026-03-28', tipo: 'entrada', valor: 1200.00 },
-      { data: '2026-03-29', tipo: 'saida',   valor: 42.50 },
-      { data: '2026-03-31', tipo: 'saida',   valor: 88.00 },
-      // Abril
-      { data: '2026-04-01', tipo: 'entrada', valor: 4500.00 },
-      { data: '2026-04-02', tipo: 'saida',   valor: 130.00 },
-      { data: '2026-04-05', tipo: 'saida',   valor: 210.00 },
-      { data: '2026-04-07', tipo: 'entrada', valor: 420.00 },
-      { data: '2026-04-10', tipo: 'saida',   valor: 890.00 },
-      { data: '2026-04-14', tipo: 'saida',   valor: 55.90 },
-      { data: '2026-04-15', tipo: 'saida',   valor: 1200.00 },
-      { data: '2026-04-18', tipo: 'entrada', valor: 600.00 },
-      { data: '2026-04-22', tipo: 'saida',   valor: 120.00 },
-      { data: '2026-04-25', tipo: 'entrada', valor: 300.00 },
-      // Fevereiro
-      { data: '2026-02-03', tipo: 'entrada', valor: 4500.00 },
-      { data: '2026-02-05', tipo: 'saida',   valor: 198.00 },
-      { data: '2026-02-10', tipo: 'saida',   valor: 67.00 },
-      { data: '2026-02-14', tipo: 'entrada', valor: 280.00 },
-      { data: '2026-02-20', tipo: 'saida',   valor: 1200.00 },
-      { data: '2026-02-25', tipo: 'saida',   valor: 55.00 },
-      { data: '2026-02-28', tipo: 'entrada', valor: 150.00 },
-    ];
+    /* ── [FIX] Lê transações reais do state da aplicação ── */
+    function getRealTransactions() {
+      return (window.appState && Array.isArray(window.appState.transactions))
+        ? window.appState.transactions
+        : [];
+    }
 
     /* ── Agrupa transações por data (YYYY-MM-DD) ── */
+    /* Transações no state usam formato "DD/MM/YYYY" → convertemos aqui */
     function buildDayMap(transactions) {
       const map = {};
       transactions.forEach(tx => {
-        if (!map[tx.data]) map[tx.data] = { entrada: 0, saida: 0 };
-        map[tx.data][tx.tipo] += tx.valor;
+        if (!tx.date) return;
+        let key = tx.date;
+        // Converte "DD/MM/YYYY" → "YYYY-MM-DD"
+        if (tx.date.includes('/')) {
+          const parts = tx.date.split('/');
+          if (parts.length === 3) key = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        if (!map[key]) map[key] = { entrada: 0, saida: 0 };
+        const v = Math.abs(tx.value ?? tx.amount ?? tx.valor ?? 0);
+        const isIncome = tx.value > 0 || tx.tipo === 'entrada';
+        if (isIncome) map[key].entrada += v;
+        else           map[key].saida  += v;
       });
       return map;
     }
@@ -1869,8 +1844,8 @@
                           'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
       label.textContent = `${monthNames[month]} ${year}`;
 
-      // Dia map para esse mês (e meses adjacentes presentes)
-      const dayMap = buildDayMap(MOCK_TRANSACTIONS);
+      // [FIX] Usa transações reais do state em vez de dados mock
+      const dayMap = buildDayMap(getRealTransactions());
 
       grid.innerHTML = '';
 
@@ -1932,6 +1907,10 @@
       let curMonth = now.getMonth();
 
       renderCalendar(curYear, curMonth);
+
+      // [FIX] Expõe a função para que o renderAll do app refresque o calendário
+      // ao salvar/editar transações sem precisar navegar de aba
+      window.finCalRender = () => renderCalendar(curYear, curMonth);
 
       prevBtn.addEventListener('click', () => {
         curMonth--;

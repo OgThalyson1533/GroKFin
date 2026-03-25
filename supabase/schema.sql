@@ -53,6 +53,10 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   recurring_template BOOLEAN DEFAULT FALSE,
   installments INTEGER DEFAULT 1,
   installment_current INTEGER DEFAULT 1,
+  -- [FIX TX #1] Campo de observações livre para notas sobre a transação
+  notes TEXT,
+  -- [FIX TX #2] URL do anexo (comprovante) armazenado no Supabase Storage
+  attachment_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -257,6 +261,35 @@ CREATE INDEX IF NOT EXISTS idx_transactions_user_category ON public.transactions
 CREATE INDEX IF NOT EXISTS idx_card_invoices_card_id ON public.card_invoices(card_id);
 CREATE INDEX IF NOT EXISTS idx_goals_user_id ON public.goals(user_id);
 CREATE INDEX IF NOT EXISTS idx_fixed_expenses_user_id ON public.fixed_expenses(user_id);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- [MIGRATION v2 #5] Adicionar campos notes e attachment_url em transactions
+-- Execute em banco existente para habilitar observações e anexos no formulário
+-- ═══════════════════════════════════════════════════════════════════
+
+-- Adiciona campo de observações livres na transação
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS notes TEXT;
+
+-- Adiciona URL pública do comprovante enviado ao Supabase Storage
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
+
+-- ── Supabase Storage: bucket para anexos de transações ──────────────────────
+-- Execute no SQL Editor do Supabase para criar o bucket (se ainda não existir).
+-- Depois acesse Storage → transaction-attachments → Policies e defina:
+--   • INSERT: auth.uid() = owner  (usuário só sobe os próprios arquivos)
+--   • SELECT: auth.uid() = owner  (ou público se quiser URLs abertas)
+--
+-- INSERT INTO storage.buckets (id, name, public)
+-- VALUES ('transaction-attachments', 'transaction-attachments', false)
+-- ON CONFLICT (id) DO NOTHING;
+--
+-- CREATE POLICY "Owners can upload attachments"
+--   ON storage.objects FOR INSERT
+--   WITH CHECK (bucket_id = 'transaction-attachments' AND auth.uid()::text = (storage.foldername(name))[1]);
+--
+-- CREATE POLICY "Owners can read attachments"
+--   ON storage.objects FOR SELECT
+--   USING (bucket_id = 'transaction-attachments' AND auth.uid()::text = (storage.foldername(name))[1]);
 
 -- [MIGRATION v2 #4] Trigger automático para criar perfil ao registrar novo usuário
 -- Evita que o upsert de perfil falhe se o usuário nunca acessou o app depois do signup

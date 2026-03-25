@@ -43,6 +43,8 @@ window.renderAll = function() {
     renderInvestments();
     // [FIX] Aba Mercado nunca era renderizada no ciclo global
     if (state.ui.activeTab === 9) renderMarketTab(false);
+    // [FIX CAL] Atualiza calendário financeiro com dados reais após qualquer mudança
+    if (typeof window.finCalRender === 'function') window.finCalRender();
     
     renderAnimationFrame = null;
   });
@@ -50,6 +52,8 @@ window.renderAll = function() {
 
 window.appRenderAll = window.renderAll;
 window.renderHeaderMeta = renderHeaderMeta;
+// [FIX CAL] Expõe state globalmente para o calendário financeiro embutido no HTML
+window.appState = state;
 
 async function initApp() {
   // 0. Autenticação restrita (bloquear se Supabase estiver configurado e o usuário não existir)

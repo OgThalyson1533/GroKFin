@@ -370,6 +370,9 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
+  /* [FIX] Garante que as colunas não crescem além do espaço disponível */
+  min-width: 0;
+  overflow: hidden;
 }
 
 .fin-cal-day {
@@ -383,6 +386,10 @@
   transition: background .18s ease, border-color .18s ease;
   cursor: default;
   position: relative;
+  /* [FIX] Impede que o conteúdo (tags de valor) vaze para fora da célula */
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .fin-cal-day:hover {
@@ -421,6 +428,10 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* [FIX] Limita a tag à largura da célula pai */
+  display: block;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .fin-cal-tag--in {

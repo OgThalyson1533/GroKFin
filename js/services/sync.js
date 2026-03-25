@@ -102,7 +102,10 @@ export async function syncToSupabase(state) {
       card_id: t.cardId ? cleanUUID(t.cardId) : null,
       recurring_template: t.recurringTemplate || false,
       installments: t.installments || 1,
-      installment_current: t.installmentCurrent || 1
+      installment_current: t.installmentCurrent || 1,
+      // [FIX TX] Campos de observação e URL do anexo
+      notes: t.notes || null,
+      attachment_url: t.attachmentUrl || null
     }));
     tasks.push(upsertWithRetry('transactions', txRows));
   }
@@ -261,7 +264,10 @@ export async function syncFromSupabase(state) {
           cardId: t.card_id,
           recurringTemplate: t.recurring_template,
           installments: t.installments,
-          installmentCurrent: t.installment_current
+          installmentCurrent: t.installment_current,
+          // [FIX TX] Mapeamento dos novos campos vindos do banco
+          notes: t.notes || null,
+          attachmentUrl: t.attachment_url || null
         };
       });
       state.balance = state.transactions.reduce((acc, t) => acc + t.value, 0);

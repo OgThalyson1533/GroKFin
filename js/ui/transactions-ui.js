@@ -150,6 +150,8 @@ export function renderTransactions() {
                 ${(item.payment === 'cartao_credito' || item.payment === 'cartao_debito') && item.cardId ? (() => { const c = (state.cards||[]).find(x=>x.id===item.cardId); return c ? `<span class="payment-badge-card rounded-full px-2 py-0.5 text-[10px] font-bold"><i class="fa-solid ${item.payment === 'cartao_debito' ? 'fa-credit-card' : 'fa-credit-card'} mr-0.5"></i>${escapeHtml(c.name)} (${item.payment === 'cartao_credito' ? 'Cred.' : 'Déb.'})</span>` : ''; })() : ''}
                 ${item.payment === 'pix' ? '<span class="payment-badge-pix rounded-full px-2 py-0.5 text-[10px] font-bold">Pix</span>' : ''}
                 ${item.payment === 'dinheiro' ? '<span class="payment-badge-dinheiro rounded-full px-2 py-0.5 text-[10px] font-bold">Dinheiro</span>' : ''}
+                ${item.notes ? `<span title="${escapeHtml(item.notes)}" class="rounded-full px-2 py-0.5 text-[10px] font-bold border border-white/10 bg-white/5 cursor-help" style="max-width:12rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle"><i class="fa-regular fa-note-sticky mr-0.5"></i>${escapeHtml(item.notes)}</span>` : ''}
+                ${item.attachmentUrl ? `<a href="${escapeHtml(item.attachmentUrl)}" target="_blank" rel="noopener" title="Ver comprovante" class="rounded-full px-2 py-0.5 text-[10px] font-bold border border-cyan-400/20 bg-cyan-400/8 text-cyan-300 hover:bg-cyan-400/15 transition-colors"><i class="fa-solid fa-paperclip mr-0.5"></i>Comprovante</a>` : ''}
               </p>
             </div>
           </div>
@@ -218,6 +220,14 @@ export function openTxModal() {
   const errEl = document.getElementById('tx-modal-error');
   if (errEl) errEl.classList.add('hidden');
 
+  // [FIX TX] Limpa campos de observação e anexo
+  const notesEl = document.getElementById('tx-modal-notes');
+  if (notesEl) notesEl.value = '';
+  const attachNameEl = document.getElementById('tx-attachment-name');
+  if (attachNameEl) attachNameEl.textContent = 'Clique para anexar imagem ou PDF';
+  const attachInput = document.getElementById('tx-modal-attachment');
+  if (attachInput) attachInput.value = '';
+
   document.getElementById('tx-modal-overlay')?.classList.remove('hidden');
   setTimeout(() => document.getElementById('tx-modal-desc')?.focus(), 60);
 }
@@ -245,6 +255,19 @@ export function openEditTx(id) {
   if (recCheck) recCheck.checked = !!tx.recurringTemplate;
 
   document.getElementById('tx-modal-error')?.classList.add('hidden');
+
+  // [FIX TX] Preenche campos de observação e anexo ao editar
+  const notesEl = document.getElementById('tx-modal-notes');
+  if (notesEl) notesEl.value = tx.notes || '';
+  const attachNameEl = document.getElementById('tx-attachment-name');
+  const attachInput  = document.getElementById('tx-modal-attachment');
+  if (attachInput) attachInput.value = '';
+  if (attachNameEl) {
+    attachNameEl.textContent = tx.attachmentUrl
+      ? tx.attachmentUrl.split('/').pop()
+      : 'Clique para anexar imagem ou PDF';
+  }
+
   document.getElementById('tx-modal-overlay')?.classList.remove('hidden');
 
   if (tx.cardId && (payment.value === 'cartao_credito' || payment.value === 'cartao_debito')) {
@@ -398,6 +421,10 @@ export function saveTxModal() {
   const isRecurring = document.getElementById('tx-modal-recurring')?.checked;
   const splitInput = document.getElementById('tx-modal-split').value;
   const installments = parseInt(splitInput) || 1;
+  // [FIX TX] Lê campo de observações
+  const notes = document.getElementById('tx-modal-notes')?.value.trim() || null;
+  // [FIX TX] Captura o arquivo de anexo (se selecionado)
+  const attachFile = document.getElementById('tx-modal-attachment')?.files?.[0] || null;
 
   const errEl = document.getElementById('tx-modal-error');
 
@@ -412,29 +439,66 @@ export function saveTxModal() {
   const finalValue = isIncome ? rawValue : -rawValue;
   const installValue = Number((finalValue / installments).toFixed(2));
 
+  // [FIX TX] Helper para upload de arquivo no Supabase Storage.
+  // Retorna a URL pública do anexo ou null se não houver arquivo / Storage não configurado.
+  async function uploadAttachment(file, txId) {
+    if (!file) return null;
+    try {
+      const { supabase } = await import('../services/supabase.js');
+      if (!supabase) return null;
+      const ext = file.name.split('.').pop();
+      const path = `attachments/${txId}.${ext}`;
+      const { error } = await supabase.storage.from('transaction-attachments').upload(path, file, { upsert: true });
+      if (error) { console.warn('[GrokFin] Falha no upload do anexo:', error.message); return null; }
+      const { data } = supabase.storage.from('transaction-attachments').getPublicUrl(path);
+      return data?.publicUrl || null;
+    } catch (e) {
+      console.warn('[GrokFin] Supabase Storage indisponível:', e.message);
+      return null;
+    }
+  }
+
   if (_editingTxId) {
     const idx = state.transactions.findIndex(t => t.id === _editingTxId);
     if (idx >= 0) {
       const diff = finalValue - state.transactions[idx].value;
       state.balance += diff;
+      // Mantém attachmentUrl existente se não houver novo arquivo
+      const existingUrl = state.transactions[idx].attachmentUrl || null;
       state.transactions[idx] = { 
         ...state.transactions[idx], 
         desc, cat, date: dateStr, value: finalValue,
         payment, cardId: (payment.includes('cartao') ? cardId : null),
-        recurringTemplate: isRecurring
+        recurringTemplate: isRecurring,
+        notes,
+        attachmentUrl: existingUrl // atualizado após upload assíncrono abaixo
       };
+      const txId = state.transactions[idx].id;
       saveState();
       showToast('Transação atualizada com sucesso.', 'success');
+
+      // [FIX TX] Upload assíncrono do novo anexo (se houver) — não bloqueia o save
+      if (attachFile) {
+        uploadAttachment(attachFile, txId).then(url => {
+          if (url) {
+            const i = state.transactions.findIndex(t => t.id === txId);
+            if (i >= 0) { state.transactions[i].attachmentUrl = url; saveState(); }
+          }
+        });
+      }
     }
   } else {
+    const newIds = [];
     for (let i = 0; i < installments; i++) {
       let d = parseDateBR(dateStr);
       if (!d) d = new Date();
       d.setMonth(d.getMonth() + i);
       const mDate = new Intl.DateTimeFormat('pt-BR').format(d);
       const isPast = d < new Date(); 
+      const txId = uid('tx');
+      newIds.push(txId);
       state.transactions.unshift({
-        id: uid('tx'),
+        id: txId,
         date: mDate,
         desc: installments > 1 ? `${desc} (${i + 1}/${installments})` : desc,
         cat,
@@ -443,13 +507,25 @@ export function saveTxModal() {
         cardId: (payment.includes('cartao') ? cardId : null),
         recurringTemplate: (i === 0 && isRecurring) ? true : undefined,
         installments: installments > 1 ? installments : undefined,
-        installmentCurrent: installments > 1 ? i + 1 : undefined
+        installmentCurrent: installments > 1 ? i + 1 : undefined,
+        // [FIX TX] Persiste observação; attachmentUrl vira null e é preenchido após upload
+        notes: (i === 0) ? notes : null,
+        attachmentUrl: null
       });
-      // Deduct/Add balance immediately only if the transaction is not in the future
       if (isPast || installments === 1) state.balance += installValue;
     }
     saveState();
     showToast(installments > 1 ? `Criada em ${installments} parcelas.` : (isRecurring ? 'Transação e recorrência criadas.' : 'Transação criada com sucesso.'), 'success');
+
+    // [FIX TX] Upload do anexo vinculado à primeira parcela
+    if (attachFile && newIds.length > 0) {
+      uploadAttachment(attachFile, newIds[0]).then(url => {
+        if (url) {
+          const i = state.transactions.findIndex(t => t.id === newIds[0]);
+          if (i >= 0) { state.transactions[i].attachmentUrl = url; saveState(); }
+        }
+      });
+    }
   }
 
   document.getElementById('tx-modal-overlay')?.classList.add('hidden');
