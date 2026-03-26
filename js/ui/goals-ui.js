@@ -125,7 +125,7 @@ export function renderGoals(analytics) {
 
         return `
           <article class="goal-card group glass-panel card-hover relative isolate min-h-[24rem] flex flex-col overflow-hidden rounded-[30px] p-6 sm:p-7">
-            <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105 opacity-70" style="background-image:url('${goalImage}')"></div>
+            <img src="${escapeHtml(goalImage)}" alt="${escapeHtml(goal.nome)}" class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-75" loading="lazy" decoding="async" />
             <div class="absolute inset-0 bg-gradient-to-t from-[#060911]/72 via-[#060911]/45 to-transparent z-0"></div>
             
             <div class="relative z-10 flex h-full flex-col">
