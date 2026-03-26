@@ -339,6 +339,15 @@ async function resizeFileToDataUrl(file, { width = 512, height = 512, quality = 
   });
 }
 
+async function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+
 /** Resize image helper (async, to use via event bindings) */
 export async function handleProfileImageUpload(event, type) {
   const file = event.target.files?.[0];
@@ -352,9 +361,15 @@ export async function handleProfileImageUpload(event, type) {
       : { width: 1600, height: 640, quality: 0.82 };
     
     // Usa util global quando disponível; fallback local para evitar erro em produção.
-    const dataUrl = window.resizeImageFile
-      ? await window.resizeImageFile(file, options)
-      : await resizeFileToDataUrl(file, options);
+    let dataUrl;
+    try {
+      dataUrl = window.resizeImageFile
+        ? await window.resizeImageFile(file, options)
+        : await resizeFileToDataUrl(file, options);
+    } catch {
+      // Fallback final: mantém a imagem original para não bloquear edição de perfil.
+      dataUrl = await fileToDataUrl(file);
+    }
     if (!dataUrl) throw new Error('Resize result empty');
     
     profileEditor.draft = resolveProfile(profileEditor.draft || state.profile || {});

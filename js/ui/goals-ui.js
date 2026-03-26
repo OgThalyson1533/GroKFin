@@ -35,6 +35,19 @@ export const GOAL_THEME_RULES = [
   { theme: 'celebration', keys: ['casamento', 'festa', 'aniversario', 'aniversário', 'lua de mel', 'evento'] },
   { theme: 'bike', keys: ['bike', 'bicicleta', 'ciclismo'] }
 ];
+const GOAL_FALLBACK_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480">
+     <defs>
+       <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+         <stop offset="0%" stop-color="#0b1220"/>
+         <stop offset="100%" stop-color="#111f35"/>
+       </linearGradient>
+     </defs>
+     <rect width="800" height="480" fill="url(#g)"/>
+     <circle cx="140" cy="90" r="110" fill="#00f5ff22"/>
+     <circle cx="700" cy="420" r="150" fill="#00ff8530"/>
+   </svg>`
+)}`;
 
 export function detectGoalTheme(name = '', explicitTheme = 'auto') {
   if (explicitTheme && explicitTheme !== 'auto' && GOAL_THEME_CATALOG[explicitTheme]) {
@@ -125,7 +138,7 @@ export function renderGoals(analytics) {
 
         return `
           <article class="goal-card group glass-panel card-hover relative isolate min-h-[24rem] flex flex-col overflow-hidden rounded-[30px] p-6 sm:p-7">
-            <img src="${escapeHtml(goalImage)}" alt="${escapeHtml(goal.nome)}" class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-75" loading="lazy" decoding="async" />
+            <img src="${escapeHtml(goalImage)}" alt="${escapeHtml(goal.nome)}" onerror="this.onerror=null;this.src='${GOAL_FALLBACK_IMAGE}'" class="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-75" loading="lazy" decoding="async" />
             <div class="absolute inset-0 bg-gradient-to-t from-[#060911]/72 via-[#060911]/45 to-transparent z-0"></div>
             
             <div class="relative z-10 flex h-full flex-col">
