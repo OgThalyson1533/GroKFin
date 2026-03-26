@@ -352,6 +352,11 @@ async function fileToDataUrl(file) {
 export async function handleProfileImageUpload(event, type) {
   const file = event.target.files?.[0];
   if (!file) return;
+  if (!String(file.type || '').startsWith('image/')) {
+    showToast('Arquivo inválido. Selecione uma imagem (JPG, PNG ou WEBP).', 'danger');
+    event.target.value = '';
+    return;
+  }
   if (!profileEditor.isEditing) {
     startProfileEditing();
   }
@@ -361,13 +366,17 @@ export async function handleProfileImageUpload(event, type) {
       : { width: 1600, height: 640, quality: 0.82 };
     
     // Usa util global quando disponível; fallback local para evitar erro em produção.
-    let dataUrl;
+    let dataUrl = null;
     try {
       dataUrl = window.resizeImageFile
         ? await window.resizeImageFile(file, options)
         : await resizeFileToDataUrl(file, options);
     } catch {
       // Fallback final: mantém a imagem original para não bloquear edição de perfil.
+      dataUrl = await fileToDataUrl(file);
+    }
+    if (!dataUrl) {
+      // Alguns helpers retornam null/undefined sem lançar erro.
       dataUrl = await fileToDataUrl(file);
     }
     if (!dataUrl) throw new Error('Resize result empty');
@@ -381,6 +390,7 @@ export async function handleProfileImageUpload(event, type) {
     applyProfileBindings(profileEditor.draft);
     showToast(type === 'avatar' ? 'Prévia do avatar atualizada. Salve para confirmar.' : 'Prévia da capa atualizada. Salve para confirmar.', 'info');
   } catch (err) {
+    console.error('[Profile] Falha ao processar imagem de perfil:', err);
     showToast('Não foi possível processar essa imagem.', 'danger');
   } finally {
     event.target.value = '';
