@@ -125,8 +125,8 @@ export function renderGoals(analytics) {
 
         return `
           <article class="goal-card group glass-panel card-hover relative isolate min-h-[24rem] flex flex-col overflow-hidden rounded-[30px] p-6 sm:p-7">
-            <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105 opacity-40 mix-blend-overlay" style="background-image:url('${goalImage}')"></div>
-            <div class="absolute inset-0 bg-gradient-to-t from-[#060911] via-[#060911]/80 to-transparent z-0"></div>
+            <div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105 opacity-70" style="background-image:url('${goalImage}')"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-[#060911]/72 via-[#060911]/45 to-transparent z-0"></div>
             
             <div class="relative z-10 flex h-full flex-col">
               <div class="flex items-start justify-between gap-3 mb-auto">
@@ -263,8 +263,9 @@ export function openEditGoal(id) {
   document.getElementById('goal-modal-atual').value = goal.atual.toFixed(2).replace('.', ',');
   document.getElementById('goal-modal-theme').value = goal.theme || 'auto';
   
-  const d = new Date(goal.deadline);
-  document.getElementById('goal-modal-deadline').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const d = goal.deadline ? new Date(goal.deadline) : addMonths(new Date(), 12);
+  const safeDate = Number.isNaN(d.getTime()) ? addMonths(new Date(), 12) : d;
+  document.getElementById('goal-modal-deadline').value = `${safeDate.getFullYear()}-${String(safeDate.getMonth() + 1).padStart(2, '0')}-${String(safeDate.getDate()).padStart(2, '0')}`;
   
   // Sem campo customimg no HTML — ignorado
   document.getElementById('goal-modal-error')?.classList.add('hidden');
@@ -406,6 +407,17 @@ export function bindGoalEvents() {
   
   document.getElementById('goal-delete-cancel')?.addEventListener('click', () => document.getElementById('goal-delete-overlay')?.classList.add('hidden'));
   document.getElementById('goal-delete-confirm')?.addEventListener('click', deleteGoal);
+  document.getElementById('goal-modal-overlay')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('goal-modal-overlay')) {
+      document.getElementById('goal-modal-overlay')?.classList.add('hidden');
+    }
+  });
+  document.getElementById('goal-delete-overlay')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('goal-delete-overlay')) {
+      _goalToDelete = null;
+      document.getElementById('goal-delete-overlay')?.classList.add('hidden');
+    }
+  });
 
   // Delegate contribution/brief events
   document.getElementById('goals-container')?.addEventListener('click', e => {
@@ -428,6 +440,16 @@ export function bindGoalEvents() {
         window.sendChatPrompt(`Resuma o plano para a meta "${g.nome}". O que devo fazer este mês?`);
       }
     }
+  });
+  document.getElementById('goals-container')?.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const inputEl = e.target.closest('input[id^="goal-invest-"]');
+    if (!inputEl) return;
+    e.preventDefault();
+    const gid = inputEl.id.replace('goal-invest-', '');
+    const val = parseCurrencyInput(inputEl.value);
+    if (val > 0) applyGoalContribution(gid, val);
+    else import('../utils/dom.js').then(m => m.showToast('Informe um valor acima de zero.', 'warning'));
   });
 
   window.openEditGoal = openEditGoal;

@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.tailwindcss.com 'unsafe-inline'; connect-src 'self' *.supabase.co economia.awesomeapi.com.br api.coingecko.com fonts.googleapis.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com cdnjs.cloudflare.com; font-src fonts.gstatic.com cdnjs.cloudflare.com; img-src 'self' data: blob:;">
   <title>GrokFin Elite v6 • Hybrid PWA Organizado</title>
   <meta name="theme-color" content="#0b0f1b">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -803,6 +804,7 @@
       <label class="block space-y-2 md:col-span-2">
         <span class="text-xs font-bold uppercase tracking-[.18em] text-white/38">Nome de usuário (@handle)</span>
         <input id="profile-handle-input" type="text" class="profile-input" placeholder="@grokfin.user">
+        <p id="profile-handle-feedback" class="hidden text-xs font-medium"></p>
       </label>
       <label class="block space-y-2 md:col-span-2">
         <span class="text-xs font-bold uppercase tracking-[.18em] text-white/38">Ondas de Fundo (Tema)</span>

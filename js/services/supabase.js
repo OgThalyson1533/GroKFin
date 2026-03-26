@@ -41,13 +41,3 @@ if (isSupabaseConfigured) {
 } else {
   console.warn('[Supabase] Chaves não configuradas. Rodando em modo totalmente offline.');
 }
-
-/**
- * Função utilitária para salvar chaves localmente via Console (modo fácil de setup local)
- */
-window.setupSupabase = function(url, anonKey) {
-  localStorage.setItem('grokfin_env_SUPABASE_URL', url);
-  localStorage.setItem('grokfin_env_SUPABASE_ANON_KEY', anonKey);
-  console.info('Configuração salva! Recarregue a página.');
-  location.reload();
-};

@@ -7,9 +7,12 @@ import { state, saveState } from '../state.js';
 import { formatMoney } from '../utils/format.js';
 import { calculateAnalytics } from '../analytics/engine.js';
 import { showToast } from '../utils/dom.js';
-import { signOut } from '../services/auth.js';
+import { signOut, currentUser } from '../services/auth.js';
+import { syncToSupabase } from '../services/sync.js';
+import { isSupabaseConfigured, supabase } from '../services/supabase.js';
 
-export const profileEditor = { isEditing: false, draft: null };
+export const profileEditor = { isEditing: false, draft: null, handleTaken: false, handleChecking: false };
+let _handleValidationTimer = null;
 
 function resolveProfile(p = {}) {
   return {
@@ -103,6 +106,75 @@ function fillProfileInputs(profile) {
 
   const themeInput = document.getElementById('profile-theme-input');
   if (themeInput) themeInput.value = profile.theme || 'cyber';
+  setHandleFeedback('', 'idle');
+}
+
+function setHandleFeedback(message, type = 'idle') {
+  const feedback = document.getElementById('profile-handle-feedback');
+  const handleInput = document.getElementById('profile-handle-input');
+  if (!feedback || !handleInput) return;
+
+  feedback.textContent = message || '';
+  feedback.classList.remove('hidden', 'text-rose-300', 'text-emerald-300', 'text-white/45');
+  handleInput.classList.remove('border-rose-500/60', 'ring-1', 'ring-rose-500/50');
+
+  if (!message) {
+    feedback.classList.add('hidden');
+    return;
+  }
+
+  if (type === 'error') {
+    feedback.classList.add('text-rose-300');
+    handleInput.classList.add('border-rose-500/60', 'ring-1', 'ring-rose-500/50');
+    return;
+  }
+
+  if (type === 'success') {
+    feedback.classList.add('text-emerald-300');
+    return;
+  }
+
+  feedback.classList.add('text-white/45');
+}
+
+async function validateHandleAvailability(handle) {
+  if (!isSupabaseConfigured || !supabase || !currentUser) return true;
+  const normalized = sanitizeHandle(handle);
+  const currentHandle = sanitizeHandle(state.profile?.handle || '');
+  if (normalized === currentHandle) return true;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('handle', normalized)
+    .neq('id', currentUser.id)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('[Profile] Não foi possível validar @handle:', error.message);
+    return true;
+  }
+  return !data;
+}
+
+function queueHandleValidation(handle) {
+  clearTimeout(_handleValidationTimer);
+  profileEditor.handleChecking = true;
+  profileEditor.handleTaken = false;
+  setHandleFeedback('Validando disponibilidade do @handle...', 'info');
+
+  _handleValidationTimer = setTimeout(async () => {
+    const isAvailable = await validateHandleAvailability(handle);
+    profileEditor.handleChecking = false;
+    profileEditor.handleTaken = !isAvailable;
+    if (!profileEditor.isEditing) return;
+    if (!handle || handle === '@') {
+      setHandleFeedback('', 'idle');
+      return;
+    }
+    if (isAvailable) setHandleFeedback('✓ @handle disponível', 'success');
+    else setHandleFeedback('Esse @handle já existe. Escolha outro.', 'error');
+  }, 350);
 }
 
 export function setProfileEditMode(isEditing) {
@@ -132,6 +204,8 @@ export function setProfileEditMode(isEditing) {
 
 export function startProfileEditing() {
   profileEditor.draft = resolveProfile(state.profile || {});
+  profileEditor.handleTaken = false;
+  profileEditor.handleChecking = false;
   setProfileEditMode(true);
   fillProfileInputs(profileEditor.draft);
 }
@@ -167,11 +241,20 @@ export function updateProfileDraftField(field, value) {
   if (field === 'handle') {
     const handleInput = document.getElementById('profile-handle-input');
     if (handleInput) handleInput.value = nextValue;
+    queueHandleValidation(nextValue);
   }
 }
 
-export function saveProfileDraft() {
+export async function saveProfileDraft() {
   if (!profileEditor.isEditing) return;
+  if (profileEditor.handleChecking) {
+    showToast('Aguarde a validação do @handle.', 'info');
+    return;
+  }
+  if (profileEditor.handleTaken) {
+    showToast('Esse @handle já existe. Escolha outro para salvar.', 'danger');
+    return;
+  }
   state.profile = resolveProfile(profileEditor.draft || state.profile || {});
   state.lastUpdated = new Date().toISOString();
   saveState();
@@ -181,6 +264,15 @@ export function saveProfileDraft() {
   if (window.renderHeaderMeta) window.renderHeaderMeta(calculateAnalytics(state));
   renderProfile(calculateAnalytics(state));
   showToast('Perfil salvo no dispositivo.', 'success');
+
+  if (isSupabaseConfigured) {
+    try {
+      await syncToSupabase(state);
+    } catch (e) {
+      console.error('[Profile] Falha ao sincronizar alterações do perfil:', e);
+      showToast('Perfil salvo localmente, mas falhou ao sincronizar na nuvem.', 'danger');
+    }
+  }
 }
 
 export function renderProfile(analytics) {
