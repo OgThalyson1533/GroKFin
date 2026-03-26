@@ -56,7 +56,20 @@ export async function signIn(email, password) {
 
 export async function signOut() {
   if (!isSupabaseConfigured) return;
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith('grokfin_'))
+    .forEach((key) => localStorage.removeItem(key));
   await supabase.auth.signOut();
   currentUser = null;
   showToast('Logout realizado', 'info');
+}
+
+export async function resetPasswordForEmail(email) {
+  if (!isSupabaseConfigured) throw new Error('Supabase não configurado');
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email);
+  if (error) {
+    showToast(error.message, 'danger');
+    throw error;
+  }
+  return data;
 }

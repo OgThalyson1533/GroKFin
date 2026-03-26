@@ -7,9 +7,12 @@ import { state, saveState } from '../state.js';
 import { formatMoney } from '../utils/format.js';
 import { calculateAnalytics } from '../analytics/engine.js';
 import { showToast } from '../utils/dom.js';
-import { signOut } from '../services/auth.js';
+import { signOut, currentUser } from '../services/auth.js';
+import { syncToSupabase } from '../services/sync.js';
+import { isSupabaseConfigured, supabase } from '../services/supabase.js';
 
-export const profileEditor = { isEditing: false, draft: null };
+export const profileEditor = { isEditing: false, draft: null, handleTaken: false, handleChecking: false };
+let _handleValidationTimer = null;
 
 function resolveProfile(p = {}) {
   return {
@@ -103,6 +106,75 @@ function fillProfileInputs(profile) {
 
   const themeInput = document.getElementById('profile-theme-input');
   if (themeInput) themeInput.value = profile.theme || 'cyber';
+  setHandleFeedback('', 'idle');
+}
+
+function setHandleFeedback(message, type = 'idle') {
+  const feedback = document.getElementById('profile-handle-feedback');
+  const handleInput = document.getElementById('profile-handle-input');
+  if (!feedback || !handleInput) return;
+
+  feedback.textContent = message || '';
+  feedback.classList.remove('hidden', 'text-rose-300', 'text-emerald-300', 'text-white/45');
+  handleInput.classList.remove('border-rose-500/60', 'ring-1', 'ring-rose-500/50');
+
+  if (!message) {
+    feedback.classList.add('hidden');
+    return;
+  }
+
+  if (type === 'error') {
+    feedback.classList.add('text-rose-300');
+    handleInput.classList.add('border-rose-500/60', 'ring-1', 'ring-rose-500/50');
+    return;
+  }
+
+  if (type === 'success') {
+    feedback.classList.add('text-emerald-300');
+    return;
+  }
+
+  feedback.classList.add('text-white/45');
+}
+
+async function validateHandleAvailability(handle) {
+  if (!isSupabaseConfigured || !supabase || !currentUser) return true;
+  const normalized = sanitizeHandle(handle);
+  const currentHandle = sanitizeHandle(state.profile?.handle || '');
+  if (normalized === currentHandle) return true;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('handle', normalized)
+    .neq('id', currentUser.id)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('[Profile] Não foi possível validar @handle:', error.message);
+    return true;
+  }
+  return !data;
+}
+
+function queueHandleValidation(handle) {
+  clearTimeout(_handleValidationTimer);
+  profileEditor.handleChecking = true;
+  profileEditor.handleTaken = false;
+  setHandleFeedback('Validando disponibilidade do @handle...', 'info');
+
+  _handleValidationTimer = setTimeout(async () => {
+    const isAvailable = await validateHandleAvailability(handle);
+    profileEditor.handleChecking = false;
+    profileEditor.handleTaken = !isAvailable;
+    if (!profileEditor.isEditing) return;
+    if (!handle || handle === '@') {
+      setHandleFeedback('', 'idle');
+      return;
+    }
+    if (isAvailable) setHandleFeedback('✓ @handle disponível', 'success');
+    else setHandleFeedback('Esse @handle já existe. Escolha outro.', 'error');
+  }, 350);
 }
 
 export function setProfileEditMode(isEditing) {
@@ -132,6 +204,8 @@ export function setProfileEditMode(isEditing) {
 
 export function startProfileEditing() {
   profileEditor.draft = resolveProfile(state.profile || {});
+  profileEditor.handleTaken = false;
+  profileEditor.handleChecking = false;
   setProfileEditMode(true);
   fillProfileInputs(profileEditor.draft);
 }
@@ -167,11 +241,20 @@ export function updateProfileDraftField(field, value) {
   if (field === 'handle') {
     const handleInput = document.getElementById('profile-handle-input');
     if (handleInput) handleInput.value = nextValue;
+    queueHandleValidation(nextValue);
   }
 }
 
-export function saveProfileDraft() {
+export async function saveProfileDraft() {
   if (!profileEditor.isEditing) return;
+  if (profileEditor.handleChecking) {
+    showToast('Aguarde a validação do @handle.', 'info');
+    return;
+  }
+  if (profileEditor.handleTaken) {
+    showToast('Esse @handle já existe. Escolha outro para salvar.', 'danger');
+    return;
+  }
   state.profile = resolveProfile(profileEditor.draft || state.profile || {});
   state.lastUpdated = new Date().toISOString();
   saveState();
@@ -181,6 +264,15 @@ export function saveProfileDraft() {
   if (window.renderHeaderMeta) window.renderHeaderMeta(calculateAnalytics(state));
   renderProfile(calculateAnalytics(state));
   showToast('Perfil salvo no dispositivo.', 'success');
+
+  if (isSupabaseConfigured) {
+    try {
+      await syncToSupabase(state);
+    } catch (e) {
+      console.error('[Profile] Falha ao sincronizar alterações do perfil:', e);
+      showToast('Perfil salvo localmente, mas falhou ao sincronizar na nuvem.', 'danger');
+    }
+  }
 }
 
 export function renderProfile(analytics) {
@@ -219,6 +311,34 @@ export function renderProfile(analytics) {
   if (window.updateInstallButtons) window.updateInstallButtons();
 }
 
+async function resizeFileToDataUrl(file, { width = 512, height = 512, quality = 0.88 } = {}) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Falha ao carregar imagem'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas indisponível'));
+
+        const ratio = Math.max(width / img.width, height / img.height);
+        const drawW = img.width * ratio;
+        const drawH = img.height * ratio;
+        const x = (width - drawW) / 2;
+        const y = (height - drawH) / 2;
+        ctx.drawImage(img, x, y, drawW, drawH);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /** Resize image helper (async, to use via event bindings) */
 export async function handleProfileImageUpload(event, type) {
   const file = event.target.files?.[0];
@@ -231,9 +351,11 @@ export async function handleProfileImageUpload(event, type) {
       ? { width: 512, height: 512, quality: 0.88 }
       : { width: 1600, height: 640, quality: 0.82 };
     
-    // Calls external resize util if available
-    const dataUrl = window.resizeImageFile ? await window.resizeImageFile(file, options) : null;
-    if (!dataUrl) throw new Error('Resize tool missing');
+    // Usa util global quando disponível; fallback local para evitar erro em produção.
+    const dataUrl = window.resizeImageFile
+      ? await window.resizeImageFile(file, options)
+      : await resizeFileToDataUrl(file, options);
+    if (!dataUrl) throw new Error('Resize result empty');
     
     profileEditor.draft = resolveProfile(profileEditor.draft || state.profile || {});
     if (type === 'avatar') {

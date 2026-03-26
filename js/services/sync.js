@@ -82,9 +82,9 @@ export async function syncToSupabase(state) {
       display_name: state.profile.displayName,
       handle: state.profile.handle,
       bio: state.profile.bio,
-      // Não sincroniza data-URLs grandes (>50kb) — evita timeout no upsert
-      avatar_url: (state.profile.avatarImage?.length || 0) < 51200 ? state.profile.avatarImage : null,
-      banner_url: (state.profile.bannerImage?.length || 0) < 102400 ? state.profile.bannerImage : null,
+      // Prioriza URLs remotas (quando existentes), com fallback para dataURL local
+      avatar_url: state.profile.avatarImageUrl || state.profile.avatarImage || null,
+      banner_url: state.profile.bannerImageUrl || state.profile.bannerImage || null,
       onboarding_completed: !state.isNewUser
     }]));
   }
@@ -246,7 +246,9 @@ export async function syncFromSupabase(state) {
         handle: profile.handle || state.profile?.handle || '@grokfin.user',
         bio: profile.bio || state.profile?.bio || '',
         avatarImage: profile.avatar_url || state.profile?.avatarImage || null,
-        bannerImage: profile.banner_url || state.profile?.bannerImage || null
+        bannerImage: profile.banner_url || state.profile?.bannerImage || null,
+        avatarImageUrl: profile.avatar_url || state.profile?.avatarImageUrl || null,
+        bannerImageUrl: profile.banner_url || state.profile?.bannerImageUrl || null
       };
     }
 
