@@ -108,7 +108,17 @@ CREATE TABLE IF NOT EXISTS public.card_invoices (
 );
 
 ALTER TABLE public.card_invoices ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can manage own card invoices" ON public.card_invoices FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own card invoices"
+  ON public.card_invoices
+  FOR ALL
+  USING (
+    auth.uid() = user_id
+    AND card_id IN (SELECT id FROM public.cards WHERE user_id = auth.uid())
+  )
+  WITH CHECK (
+    auth.uid() = user_id
+    AND card_id IN (SELECT id FROM public.cards WHERE user_id = auth.uid())
+  );
 
 -- [FIX SQL #2] Trigger correspondente ao updated_at adicionado acima.
 CREATE TRIGGER update_card_invoices_modtime
@@ -205,7 +215,11 @@ CREATE TABLE IF NOT EXISTS public.exchange_rate_cache (
   rate NUMERIC(16, 6) NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
--- Nenhuma RLS específica, ou permitir leitura para todos os autenticados.
+ALTER TABLE public.exchange_rate_cache ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users can read exchange rates"
+  ON public.exchange_rate_cache
+  FOR SELECT
+  USING (auth.role() = 'authenticated');
 
 -- ═══════════════════════════════════════════════════════════════════
 -- SCRIPT DE MIGRAÇÃO (rodar apenas em banco existente, não em novo)
@@ -279,17 +293,17 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS attachment_url TEXT;
 --   • INSERT: auth.uid() = owner  (usuário só sobe os próprios arquivos)
 --   • SELECT: auth.uid() = owner  (ou público se quiser URLs abertas)
 --
--- INSERT INTO storage.buckets (id, name, public)
--- VALUES ('transaction-attachments', 'transaction-attachments', false)
--- ON CONFLICT (id) DO NOTHING;
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('transaction-attachments', 'transaction-attachments', false)
+ON CONFLICT (id) DO NOTHING;
 --
--- CREATE POLICY "Owners can upload attachments"
---   ON storage.objects FOR INSERT
---   WITH CHECK (bucket_id = 'transaction-attachments' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Owners can upload/read attachments"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'transaction-attachments' AND auth.uid()::text = (storage.foldername(name))[1]);
 --
--- CREATE POLICY "Owners can read attachments"
---   ON storage.objects FOR SELECT
---   USING (bucket_id = 'transaction-attachments' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Owners can read attachments"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'transaction-attachments' AND auth.uid()::text = (storage.foldername(name))[1]);
 
 -- [MIGRATION v2 #4] Trigger automático para criar perfil ao registrar novo usuário
 -- Evita que o upsert de perfil falhe se o usuário nunca acessou o app depois do signup
@@ -307,7 +321,7 @@ BEGIN
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created

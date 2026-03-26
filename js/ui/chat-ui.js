@@ -98,6 +98,31 @@ export function setChatTyping(value) {
   renderChat();
 }
 
+async function callAIProxy({ provider, ...payload }) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch('/api/ai-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, ...payload }),
+      signal: controller.signal
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || err?.message || `HTTP ${res.status}`);
+    }
+    return await res.json();
+  } catch (e) {
+    if (e.name === 'AbortError' || e.name === 'TimeoutError') {
+      throw new Error('Timeout — verifique sua conexão.');
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function sendGeminiMessage(userText, apiKey) {
   const analytics = calculateAnalytics(state);
   const recentTxs = state.transactions.slice(0, 8).map(t =>
@@ -156,58 +181,15 @@ export async function sendGeminiMessage(userText, apiKey) {
     contents: [{ parts: [{ text: context + '\n\nPergunta do usuário: ' + userText }] }],
     generationConfig: { maxOutputTokens: 600, temperature: 0.7 }
   };
-
-  const ENDPOINTS = [
-    { model: 'gemini-2.0-flash', ver: 'v1beta' },
-    { model: 'gemini-2.0-flash-lite', ver: 'v1beta' }
-  ];
-  
-  let firstErr = null;
-
-  for (const { model, ver } of ENDPOINTS) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${apiKey}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (res.status === 429) {
-        if (!firstErr) firstErr = new Error('Cota atingida. Limite gratuito: 15 req/min. Aguarde 1 minuto e tente novamente.');
-        continue;
-      }
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        const detail = errData?.error?.message || '';
-        if (res.status === 404 || detail.includes('not found') || detail.includes('not supported')) {
-          if (!firstErr) firstErr = new Error('Modelo indisponível para sua conta.');
-          continue;
-        }
-        if (res.status === 400) throw new Error('Chave inválida. Verifique em aistudio.google.com');
-        if (res.status === 403) throw new Error('Acesso negado. Ative a API Gemini em aistudio.google.com');
-        throw new Error(detail || `Erro HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) return text;
-      if (!firstErr) firstErr = new Error('Resposta vazia do Gemini.');
-      continue;
-    } catch (e) {
-      if (e.name === 'AbortError' || e.name === 'TimeoutError') {
-        throw new Error('Timeout — verifique sua conexão.');
-      }
-      throw e;
-    }
-  }
-
-  throw firstErr || new Error('Gemini indisponível. Verifique sua chave.');
+  const data = await callAIProxy({
+    provider: 'gemini',
+    apiKey,
+    mode: 'text',
+    payload
+  });
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || data?.text;
+  if (!text) throw new Error('Resposta vazia do Gemini.');
+  return text;
 }
 
 export function buildAssistantReply(rawText) {
@@ -483,23 +465,13 @@ export async function sendClaudeAPIMessage(userText, apiKey) {
     ...state.chatHistory.slice(-6).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text })),
     { role: 'user', content: userText }
   ];
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 512, system: systemPrompt, messages }),
-    signal: controller.signal
+  const data = await callAIProxy({
+    provider: 'claude',
+    apiKey,
+    mode: 'text',
+    payload: { model: 'claude-haiku-4-5-20251001', max_tokens: 512, system: systemPrompt, messages }
   });
-  clearTimeout(timeoutId);
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `HTTP ${res.status}`);
-  }
-  const data = await res.json();
-  return data.content?.[0]?.text || 'Sem resposta da IA.';
+  return data?.content?.[0]?.text || data?.text || 'Sem resposta da IA.';
 }
 
 // ── Detecção de provedor centralizada ────────────────────────────────────────
@@ -512,62 +484,26 @@ export function getAIProvider(key) {
 }
 
 export async function sendGeminiImageMessage(base64, mimeType, apiKey) {
-  const payload = {
-    contents: [{
-      parts: [
-        { text: "Analise este comprovante ou imagem financeira. Se for uma despesa, extraia o valor, e o que foi pago. Seja breve e direto." },
-        { inline_data: { mime_type: mimeType, data: base64 } }
-      ]
-    }]
-  };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  if (!res.ok) throw new Error('Falha no Gemini Vision API');
-  const data = await res.json();
+  const data = await callAIProxy({
+    provider: 'gemini',
+    apiKey,
+    mode: 'image',
+    base64,
+    mimeType
+  });
   return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Não consegui ler a imagem.';
 }
 
 // ── Análise de imagem via Claude Vision API ───────────────────────────────────
 export async function sendClaudeImageMessage(base64, mimeType, apiKey) {
-  const PROMPT_IMAGE = [
-    'Analise este comprovante ou imagem financeira.',
-    'Extraia: (1) valor pago, (2) estabelecimento/descrição, (3) data se visível,',
-    '(4) categoria financeira provável (ex: Alimentação, Transporte, Saúde, Lazer, Moradia).',
-    'Se conseguir identificar um lançamento claro, sugira o comando de registro: ex: "Gastei R$ XX em [descrição]".',
-    'Seja direto e conciso. Responda em português do Brasil.'
-  ].join(' ');
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 400,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
-          { type: 'text', text: PROMPT_IMAGE }
-        ]
-      }]
-    }),
-    signal: controller.signal
+  const data = await callAIProxy({
+    provider: 'claude',
+    apiKey,
+    mode: 'image',
+    base64,
+    mimeType
   });
-  clearTimeout(timeoutId);
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `HTTP ${res.status}`);
-  }
-  const data = await res.json();
-  return data.content?.[0]?.text || 'Não consegui ler a imagem.';
+  return data?.content?.[0]?.text || data?.text || 'Não consegui ler a imagem.';
 }
 
 export function handleChatImageInput(e) {

@@ -10,6 +10,7 @@ import { uid } from '../utils/math.js';
 import { parseDateBR } from '../utils/date.js';
 import { showToast, normalizeText } from '../utils/dom.js';
 import { deleteRemoteTransaction } from '../services/transactions.js';
+import { SUPABASE_URL } from '../services/supabase.js';
 
 let _editingTxId = null;
 let _txToDelete = null;
@@ -151,7 +152,7 @@ export function renderTransactions() {
                 ${item.payment === 'pix' ? '<span class="payment-badge-pix rounded-full px-2 py-0.5 text-[10px] font-bold">Pix</span>' : ''}
                 ${item.payment === 'dinheiro' ? '<span class="payment-badge-dinheiro rounded-full px-2 py-0.5 text-[10px] font-bold">Dinheiro</span>' : ''}
                 ${item.notes ? `<span title="${escapeHtml(item.notes)}" class="rounded-full px-2 py-0.5 text-[10px] font-bold border border-white/10 bg-white/5 cursor-help" style="max-width:12rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle"><i class="fa-regular fa-note-sticky mr-0.5"></i>${escapeHtml(item.notes)}</span>` : ''}
-                ${item.attachmentUrl ? `<a href="${escapeHtml(item.attachmentUrl)}" target="_blank" rel="noopener" title="Ver comprovante" class="rounded-full px-2 py-0.5 text-[10px] font-bold border border-cyan-400/20 bg-cyan-400/8 text-cyan-300 hover:bg-cyan-400/15 transition-colors"><i class="fa-solid fa-paperclip mr-0.5"></i>Comprovante</a>` : ''}
+                ${item.attachmentUrl && SUPABASE_URL && item.attachmentUrl.startsWith(`${SUPABASE_URL}/storage/v1/object/`) ? `<a href="${escapeHtml(item.attachmentUrl)}" target="_blank" rel="noopener" title="Ver comprovante" class="rounded-full px-2 py-0.5 text-[10px] font-bold border border-cyan-400/20 bg-cyan-400/8 text-cyan-300 hover:bg-cyan-400/15 transition-colors"><i class="fa-solid fa-paperclip mr-0.5"></i>Comprovante</a>` : ''}
               </p>
             </div>
           </div>
