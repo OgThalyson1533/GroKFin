@@ -391,7 +391,10 @@ export async function sendChatMessage() {
     return;
   }
 
-  const apiKey   = localStorage.getItem('grokfin_anthropic_key');
+  // [DISABLED] localStorage completamente desabilizado
+  // Chaves de API NUNCA são armazenadas localmente
+  // const apiKey   = localStorage.getItem('grokfin_anthropic_key');
+  const apiKey = null;
   const provider = getAIProvider(apiKey);
   if (provider !== 'none') {
     try {
@@ -531,7 +534,10 @@ export function handleChatImageInput(e) {
     pushChatMessage('user', `📎 **Comprovante anexado:** ${displayName}`);
     setChatTyping(true);
 
-    const apiKey   = localStorage.getItem('grokfin_anthropic_key');
+    // [DISABLED] localStorage completamente desabilizado
+    // Chaves de API NUNCA são armazenadas localmente
+    // const apiKey   = localStorage.getItem('grokfin_anthropic_key');
+    const apiKey = null;
     const provider = getAIProvider(apiKey);
 
     try {

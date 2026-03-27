@@ -130,69 +130,31 @@ function mapLegacyActiveTab(index) {
 }
 
 // ── loadState ─────────────────────────────────────────────────────────────────
+// [DISABLED] localStorage completamente desabilizado
+// Tudo é mantido APENAS no Supabase. Sem exceções.
+// loadState() retorna sempre o estado seed (vazio)
 
 export function loadState() {
-  const seed = buildSeedState();
-  try {
-    const currentRaw = localStorage.getItem(STORAGE_KEY);
-    const legacyRaw  = currentRaw ? null : localStorage.getItem(LEGACY_STORAGE_KEY);
-    const raw = currentRaw || legacyRaw;
-    if (!raw) return seed;
-
-    const saved = JSON.parse(raw);
-    const savedActiveTab = Number(saved?.ui?.activeTab);
-    const activeTab = currentRaw
-      ? mapCurrentActiveTab(Number.isFinite(savedActiveTab) ? savedActiveTab : seed.ui.activeTab)
-      : mapLegacyActiveTab(Number.isFinite(savedActiveTab) ? savedActiveTab : seed.ui.activeTab);
-
-    const goalsSource = Array.isArray(saved.goals) && saved.goals.length ? saved.goals : seed.goals;
-
-    return {
-      ...seed,
-      ...saved,
-      isNewUser: saved.isNewUser ?? (raw ? false : true),
-      exchange:     { ...seed.exchange,     ...(saved.exchange    || {}), trend: { ...seed.exchange.trend, ...(saved.exchange?.trend || {}) } },
-      ui:           { ...seed.ui,           ...(saved.ui          || {}), activeTab },
-      budgets:      { ...seed.budgets,      ...(saved.budgets     || {}) },
-      profile:      { ...seed.profile,      ...(saved.profile     || {}) },
-      transactions: Array.isArray(saved.transactions) && saved.transactions.length ? saved.transactions : seed.transactions,
-      cards:        Array.isArray(saved.cards)        ? saved.cards        : seed.cards,
-      investments:  Array.isArray(saved.investments)  ? saved.investments  : seed.investments,
-      fixedExpenses:Array.isArray(saved.fixedExpenses)? saved.fixedExpenses: seed.fixedExpenses,
-      goals:        goalsSource,
-      chatHistory:  Array.isArray(saved.chatHistory)  ? saved.chatHistory  : []
-    };
-  } catch {
-    return seed;
-  }
+  // NADA é carregado do localStorage
+  // Estado inicial vem do Supabase via syncFromSupabase()
+  return buildSeedState();
 }
 
 // ── saveState ─────────────────────────────────────────────────────────────────
+// [DISABLED] localStorage completamente desabilizado
+// Apenas Supabase é usado para persistência. Sem fallbacks locais.
 
 let _syncTimeout = null;
 
-// [FIX #2] Removido parâmetro `state` da assinatura. Todos os callers chamavam
-// saveState() sem argumento, fazendo o parâmetro chegar como `undefined` e nunca
-// persistindo nada no localStorage. Agora usa o `state` exportado deste módulo
-// diretamente, que é o objeto mutado pela aplicação inteira.
 export function saveState() {
-  try {
-    const toSave = { ...state, chatHistory: (state.chatHistory || []).slice(-40) };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-    
-    // Background sync para o Supabase (Debounced)
-    if (!state.isNewUser) {
-      clearTimeout(_syncTimeout);
-      _syncTimeout = setTimeout(() => {
-        syncToSupabase(state).catch(e => console.error('[Sync] Falha auto-sync:', e));
-      }, 2500);
-    }
-  } catch {
-    // localStorage cheio — tenta versão slim sem imagens e chat
-    try {
-      const slim = { ...state, chatHistory: [], profile: { ...state.profile, bannerImage: '', avatarImage: '' } };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
-      console.warn('GrokFin: localStorage quase cheio, imagens de perfil removidas do cache.');
-    } catch { /* ignore */ }
+  // **NADA** é salvo no localStorage
+  // Tudo vai direto para Supabase via syncToSupabase()
+  
+  // Background sync para o Supabase (Debounced)
+  if (!state.isNewUser) {
+    clearTimeout(_syncTimeout);
+    _syncTimeout = setTimeout(() => {
+      syncToSupabase(state).catch(e => console.error('[Sync] Falha auto-sync:', e));
+    }, 1500);
   }
 }

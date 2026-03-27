@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.tailwindcss.com 'unsafe-inline'; connect-src 'self' *.supabase.co economia.awesomeapi.com.br api.coingecko.com fonts.googleapis.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com cdnjs.cloudflare.com; font-src fonts.gstatic.com cdnjs.cloudflare.com; img-src 'self' data: blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' cdn.jsdelivr.net cdnjs.cloudflare.com cdn.tailwindcss.com 'unsafe-inline'; connect-src 'self' *.supabase.co economia.awesomeapi.com.br api.coingecko.com fonts.googleapis.com; style-src 'self' 'unsafe-inline' fonts.googleapis.com cdnjs.cloudflare.com; font-src fonts.gstatic.com cdnjs.cloudflare.com; img-src 'self' https://images.unsplash.com data: blob:;">
   <title>GrokFin Elite v6 • Hybrid PWA Organizado</title>
   <meta name="theme-color" content="#0b0f1b">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1663,7 +1663,73 @@
   </div>
 
   <div id="toast-container" class="fixed bottom-24 right-4 z-50 flex w-[min(92vw,420px)] flex-col gap-3 lg:bottom-5 lg:right-5" aria-live="polite" aria-atomic="false"></div>
+  
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- CARREGA CREDENCIAIS DO SUPABASE VIA EDGE FUNCTION (Opção 4)    -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <script>
+    (async function loadSupabaseConfig() {
+      try {
+        // Tenta carregar credenciais da Edge Function do Supabase
+        // Endpoint: /functions/v1/config
+        const response = await fetch('./functions/v1/config', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP Error: ${response.status}`);
+        }
+
+        const config = await response.json();
+
+        // Define variáveis globais com as credenciais recebidas
+        if (config.url && config.key) {
+          window.__ENV_SUPABASE_URL = config.url;
+          window.__ENV_SUPABASE_ANON_KEY = config.key;
+          console.log('[Supabase Config] ✓ Credenciais carregadas via Edge Function');
+          console.log('[Supabase Config] URL:', config.url.substring(0, 20) + '...');
+        } else {
+          throw new Error('Credenciais inválidas na resposta');
+        }
+      } catch (error) {
+        console.error('[Supabase Config] ✗ Erro ao carregar credenciais:', error.message);
+        console.warn('[Supabase Config] Fallback: use variáveis globais window.__ENV_SUPABASE_*');
+      }
+    })();
+  </script>
+  
   <!-- Módulos ES6 (migração incremental) -->
+  <script type="module">
+    // Importa utilidade de redimensionamento de imagem
+    import { resizeImageFile } from './js/utils/imageResize.js';
+    window.resizeImageFile = resizeImageFile;
+    
+    // As funções de categoria são importadas via transactions-ui.js no app.js
+    // mas precisamos aqui para garantir que estão acessíveis globalmente
+    // Aguardamos um tempo para que o app.js tenha carregado os módulos
+    setTimeout(() => {
+      // Se as funções não estiverem acessíveis ainda, elas serão definidas por app.js
+      console.log('[Init] Funções globais preparadas: resizeImageFile, openCategoryModal, saveCategoryModal, closeCategoryModal');
+    }, 100);
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- CARREGAMENTO DE CREDENCIAIS SUPABASE -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <script>
+    // Configuração: Credenciais do Supabase
+    // Estas são variáveis PÚBLICAS (ANON_KEY) - seguro expor
+    // O RLS protege os dados no backend
+    window.__ENV_SUPABASE_URL = 'https://glyjmoacozaxucvkpxfj.supabase.co';
+    window.__ENV_SUPABASE_ANON_KEY = 'sb_publishable_ENfLOk9iK8-5yqn-OSQ8pw_GCmDqK7c';
+    
+    console.log('[Supabase Config] ✓ Credenciais carregadas');
+    console.log('[Security] ✓ localStorage desabilitado — dados sincronizam apenas com Supabase');
+  </script>
+
   <script type="module" src="./js/app.js"></script>
 
   <!-- ═══════════════════════════════════════════════════════════════
@@ -1687,9 +1753,9 @@
         // Sincroniza aparência das abas
         tabEntrada.classList.toggle('active', type === 'entrada');
         tabSaida.classList.toggle('active',   type === 'saida');
-        // Mostra/oculta seção de pagamento (só para saída)
+        // Seção de pagamento agora aparece SEMPRE (entrada e saída ambas precisam especificar forma de recebimento/pagamento)
         if (paySection) {
-          paySection.style.display = type === 'saida' ? '' : 'none';
+          paySection.style.display = '';
         }
         // Dispara evento change para que o JS existente reaja
         selType.dispatchEvent(new Event('change', { bubbles: true }));

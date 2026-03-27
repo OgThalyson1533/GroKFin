@@ -111,7 +111,12 @@ async function initApp() {
   // #ai-active-indicator e #ai-mode-label ficavam estáticos; agora refletem
   // o provedor configurado assim que o app inicializa.
   (function updateAIIndicator() {
-    const apiKey   = localStorage.getItem('grokfin_anthropic_key');
+    // [DISABLED] localStorage.getItem removido — chaves NUNCA são salvas/carregadas
+    // const apiKey   = localStorage.getItem('grokfin_anthropic_key');
+    
+    // Em produção, usar Edge Functions do Supabase para IA
+    // Sem chaves armazenadas localmente
+    const apiKey = null;
     const provider = getAIProvider(apiKey);
     const indicator = document.getElementById('ai-active-indicator');
     const modeLabel = document.getElementById('ai-mode-label');

@@ -56,9 +56,10 @@ export async function signIn(email, password) {
 
 export async function signOut() {
   if (!isSupabaseConfigured) return;
-  Object.keys(localStorage)
-    .filter((key) => key.startsWith('grokfin_'))
-    .forEach((key) => localStorage.removeItem(key));
+  // [DISABLED] localStorage completamente desabilizado
+  // Object.keys(localStorage)
+  //   .filter((key) => key.startsWith('grokfin_'))
+  //   .forEach((key) => localStorage.removeItem(key));
   await supabase.auth.signOut();
   currentUser = null;
   showToast('Logout realizado', 'info');

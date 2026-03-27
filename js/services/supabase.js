@@ -9,15 +9,18 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 // Tenta pegar de variáveis injetadas ou do ambiente
-// Para rodar local sem bundler, o usuário pode definir no localStorage ou hardcoded
+// localStorage COMPLETAMENTE DESABILIZADO - use variáveis globais ou window
 const getEnv = (key) => {
-  let val = window[`__ENV_${key}`] || localStorage.getItem(`grokfin_env_${key}`);
+  // [DISABLED] localStorage completamente removido
+  // As credenciais do Supabase devem estar em:
+  // 1. Variáveis globais: window.__ENV_SUPABASE_URL, window.__ENV_SUPABASE_ANON_KEY
+  // 2. Ou injetadas via script antes do app.js
+  // 3. Ou configuradas em HTML <body> tags data-*
+  let val = window[`__ENV_${key}`];
   if (!val) {
-    try {
-      const cfg = JSON.parse(localStorage.getItem('grokfin-cfg') || '{}');
-      if (key === 'SUPABASE_URL') val = cfg.supabaseUrl;
-      if (key === 'SUPABASE_ANON_KEY') val = cfg.supabaseAnonKey;
-    } catch(e) {}
+    // Tenta recuperar de atributos data-* no body
+    if (key === 'SUPABASE_URL') val = document.body.dataset.supabaseUrl;
+    if (key === 'SUPABASE_ANON_KEY') val = document.body.dataset.supabaseAnonKey;
   }
   return val || '';
 };

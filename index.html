@@ -875,17 +875,22 @@
     }
 
     function persist() {
-      const cfg = FIELDS.reduce((a, id) => { a[id] = r(id); return a; }, {});
-      cfg._prov = _prov;
-      localStorage.setItem(SK, JSON.stringify(cfg));
+      // [DISABLED] localStorage completamente desabilizado
+      // Nenhuma chave de API é salva localmente
+      // TUDO é mantido apenas no Supabase
+      // const cfg = FIELDS.reduce((a, id) => { a[id] = r(id); return a; }, {});
+      // cfg._prov = _prov;
+      // localStorage.setItem(SK, JSON.stringify(cfg));
     }
 
     function hydrate() {
-      try {
-        const s = JSON.parse(localStorage.getItem(SK) || '{}');
-        FIELDS.forEach(id => w(id, s[id]));
-        if (s._prov) selProv(s._prov, false);
-      } catch(_) {}
+      // [DISABLED] localStorage completamente desabilizado
+      // Nada é carregado do armazenamento local
+      // try {
+      //   const s = JSON.parse(localStorage.getItem(SK) || '{}');
+      //   FIELDS.forEach(id => w(id, s[id]));
+      //   if (s._prov) selProv(s._prov, false);
+      // } catch(_) {}
     }
 
     FIELDS.forEach(id => {
@@ -1026,7 +1031,8 @@
     });
 
     document.getElementById('btnClearAll').addEventListener('click', () => {
-      localStorage.removeItem(SK);
+      // [DISABLED] localStorage.removeItem(SK);
+      // localStorage completamente desabilizado - nada para limpar localmente
       FIELDS.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
