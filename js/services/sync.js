@@ -192,6 +192,19 @@ export async function syncToSupabase(state) {
     if (budgetRows.length) tasks.push(upsertWithRetry('budgets', budgetRows));
   }
 
+  // 8. Categorias Customizadas
+  if (state.userCategories?.length && hasChanged('userCategories', state.userCategories)) {
+    const catRows = state.userCategories.map(c => ({
+      id: cleanUUID(c.id),
+      user_id: uid,
+      name: c.name,
+      icon: c.icon,
+      color_tone: c.color_tone,
+      is_default: false
+    }));
+    if (catRows.length) tasks.push(upsertWithRetry('user_categories', catRows));
+  }
+
   if (!tasks.length) {
     console.info('[Sync] Sem mudanças — skip.');
     return;
@@ -224,7 +237,8 @@ export async function syncFromSupabase(state) {
       { data: buds },
       { data: cards },
       { data: invoices },
-      { data: invs }
+      { data: invs },
+      { data: userCats }
     ] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', uid).maybeSingle(),
       supabase.from('transactions').select('*').eq('user_id', uid).order('date', { ascending: false }),
@@ -233,7 +247,8 @@ export async function syncFromSupabase(state) {
       supabase.from('budgets').select('*').eq('user_id', uid),
       supabase.from('cards').select('*').eq('user_id', uid),
       supabase.from('card_invoices').select('*').eq('user_id', uid),
-      supabase.from('investments').select('*').eq('user_id', uid)
+      supabase.from('investments').select('*').eq('user_id', uid),
+      supabase.from('user_categories').select('*').eq('user_id', uid)
     ]);
 
     // Perfil
@@ -326,10 +341,24 @@ export async function syncFromSupabase(state) {
         }))
       : [];
 
+    // Categorias Customizadas
+    state.userCategories = userCats?.length
+      ? userCats.map(c => ({
+          id: c.id,
+          user_id: c.user_id,
+          name: c.name,
+          icon: c.icon,
+          color_tone: c.color_tone,
+          is_default: false,
+          created_at: c.created_at,
+          updated_at: c.updated_at
+        }))
+      : [];
+
     state.isNewUser = !isOnboardingCompleted && !txs?.length && !goals?.length;
 
     // Popula cache de hash para evitar re-sync imediato após pull
-    ['transactions', 'goals', 'cards', 'investments', 'fixedExpenses'].forEach(k => {
+    ['transactions', 'goals', 'cards', 'investments', 'fixedExpenses', 'userCategories'].forEach(k => {
       _lastSyncHash[k] = quickHash(state[k]);
     });
 

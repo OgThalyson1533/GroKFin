@@ -327,3 +327,53 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 9. USER CATEGORIES (Categorias customizadas por usuário)
+-- [NEW] Permite que cada usuário crie suas próprias categorias de transação
+-- ═══════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.user_categories (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  name TEXT NOT NULL,
+  icon TEXT DEFAULT 'fa-wallet', -- FontAwesome icon class
+  color_tone TEXT DEFAULT 'tone-slate', -- CSS tone class para cor customizada
+  is_default BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índice único para garantir nomes de categorias únicos por usuário (case-insensitive)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_categories_unique_name 
+  ON public.user_categories(user_id, LOWER(name));
+
+ALTER TABLE public.user_categories ENABLE ROW LEVEL SECURITY;
+
+-- Usuário só consegue ver suas próprias categorias
+CREATE POLICY "Users can view own categories"
+  ON public.user_categories FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Usuário só consegue criar categorias para si mesmo
+CREATE POLICY "Users can create categories"
+  ON public.user_categories FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Usuário só consegue editar suas próprias categorias
+CREATE POLICY "Users can update own categories"
+  ON public.user_categories FOR UPDATE
+  USING (auth.uid() = user_id);
+
+-- Usuário só consegue deletar suas próprias categorias
+CREATE POLICY "Users can delete own categories"
+  ON public.user_categories FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- Trigger automático para atualizar updated_at
+CREATE TRIGGER update_user_categories_modtime
+BEFORE UPDATE ON public.user_categories FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- Índice para melhorar performance de queries por user_id
+CREATE INDEX IF NOT EXISTS idx_user_categories_user_id ON public.user_categories(user_id);

@@ -5,12 +5,13 @@
 
 import { state, saveState } from '../state.js';
 import { formatMoney, escapeHtml, parseCurrencyInput } from '../utils/format.js';
-import { toneForCategory, iconForCategory } from '../config.js';
+import { toneForCategory, iconForCategory, getAllCategories } from '../config.js';
 import { uid } from '../utils/math.js';
 import { parseDateBR } from '../utils/date.js';
 import { showToast, normalizeText } from '../utils/dom.js';
 import { deleteRemoteTransaction } from '../services/transactions.js';
-import { SUPABASE_URL } from '../services/supabase.js';
+import { supabase, isSupabaseConfigured, SUPABASE_URL } from '../services/supabase.js';
+import { currentUser } from '../services/auth.js';
 
 let _editingTxId = null;
 let _txToDelete = null;
@@ -81,14 +82,18 @@ export function renderTransactionFilters() {
     }
   }
 
-  const categories = [...new Set(state.transactions.map(item => item.cat))].sort((a, b) => a.localeCompare(b));
-  if (!categories.includes(state.ui.txCategory)) {
+  // [NEW] Usar getAllCategories() para incluir categorias customizadas + padrões
+  const allCategories = getAllCategories(state.userCategories);
+  const categoryNames = allCategories.map(c => c.name);
+  
+  // Validar que a categoria selecionada ainda existe
+  if (!categoryNames.includes(state.ui.txCategory) && state.ui.txCategory !== 'all') {
     state.ui.txCategory = 'all';
   }
 
   txCategory.innerHTML = `
     <option value="all">Todas as categorias</option>
-    ${categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('')}
+    ${categoryNames.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('')}
   `;
   txCategory.value = state.ui.txCategory;
 }
@@ -819,3 +824,172 @@ export function bindTxEvents() {
   window.confirmDeleteTx = confirmDeleteTx;
   window.loadMoreTransactions = loadMoreTransactions;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// CUSTOM CATEGORIES MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════
+
+const ICON_OPTIONS = [
+  'fa-bowl-food', 'fa-car-side', 'fa-film', 'fa-house', 'fa-chart-line',
+  'fa-repeat', 'fa-heart-pulse', 'fa-bullseye', 'fa-bag-shopping', 'fa-gamepad',
+  'fa-plane', 'fa-dumbbell', 'fa-book', 'fa-palette', 'fa-music', 'fa-utensils',
+  'fa-shopping-bag', 'fa-bed', 'fa-tree', 'fa-camera', 'fa-compass', 'fa-flask'
+];
+
+const TONE_OPTIONS = [
+  'tone-cyan', 'tone-violet', 'tone-success', 'tone-slate',
+  'tone-amber', 'tone-danger'
+];
+
+let _selectedCategoryIcon = ICON_OPTIONS[0];
+let _selectedCategoryTone = TONE_OPTIONS[0];
+
+export function openCategoryModal() {
+  // Renderizar seletores de ícone
+  const iconPicker = document.getElementById('cat-icon-picker');
+  if (iconPicker) {
+    iconPicker.innerHTML = ICON_OPTIONS.map((icon, idx) => `
+      <button type="button" onclick="selectCategoryIcon('${icon}')" 
+        id="icon-${icon}" data-icon="${icon}"
+        class="w-full aspect-square rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-lg text-white/60 hover:border-cyan-400 hover:text-cyan-300 transition-colors"
+        title="${icon}">
+        <i class="fa-solid ${icon}"></i>
+      </button>
+    `).join('');
+    
+    // Selecionar primeiro ícone por padrão
+    selectCategoryIcon(ICON_OPTIONS[0]);
+  }
+  
+  // Renderizar seletores de tom
+  const tonePicker = document.getElementById('cat-tone-picker');
+  if (tonePicker) {
+    tonePicker.innerHTML = TONE_OPTIONS.map(tone => {
+      const toneClass = tone === 'tone-cyan' ? 'bg-cyan-400/30 border-cyan-400/40' :
+                        tone === 'tone-violet' ? 'bg-violet-400/30 border-violet-400/40' :
+                        tone === 'tone-success' ? 'bg-emerald-400/30 border-emerald-400/40' :
+                        tone === 'tone-slate' ? 'bg-slate-400/30 border-slate-400/40' :
+                        tone === 'tone-amber' ? 'bg-amber-400/30 border-amber-400/40' :
+                        'bg-rose-400/30 border-rose-400/40';
+      return `
+        <button type="button" onclick="selectCategoryTone('${tone}')"
+          id="tone-${tone}" data-tone="${tone}"
+          class="w-10 h-10 rounded-lg border-2 opacity-50 hover:opacity-100 transition-opacity ${toneClass}"
+          title="${tone}"></button>
+      `;
+    }).join('');
+    
+    selectCategoryTone(TONE_OPTIONS[0]);
+  }
+  
+  document.getElementById('category-modal-overlay')?.classList.remove('hidden');
+  document.getElementById('cat-modal-name')?.focus();
+}
+
+export function closeCategoryModal() {
+  document.getElementById('category-modal-overlay')?.classList.add('hidden');
+  document.getElementById('cat-modal-name').value = '';
+  document.getElementById('cat-modal-name-error')?.classList.add('hidden');
+}
+
+window.selectCategoryIcon = function(icon) {
+  _selectedCategoryIcon = icon;
+  document.querySelectorAll('#cat-icon-picker button').forEach(btn => {
+    const isSelected = btn.dataset.icon === icon;
+    btn.classList.toggle('border-cyan-400 text-cyan-300 ring-2 ring-cyan-400', isSelected);
+    btn.classList.toggle('text-white/60', !isSelected);
+  });
+}
+
+window.selectCategoryTone = function(tone) {
+  _selectedCategoryTone = tone;
+  document.querySelectorAll('#cat-tone-picker button').forEach(btn => {
+    const isSelected = btn.dataset.tone === tone;
+    btn.classList.toggle('ring-2 ring-white/50 opacity-100', isSelected);
+    btn.classList.toggle('opacity-50', !isSelected);
+  });
+}
+
+window.saveCategoryModal = async function() {
+  const name = document.getElementById('cat-modal-name').value.trim();
+  const errorEl = document.getElementById('cat-modal-name-error');
+  const errorMsgEl = document.getElementById('cat-name-error-msg');
+  
+  // Validações
+  if (!name) {
+    errorMsgEl.textContent = 'Digite um nome para a categoria';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  if (name.length < 2 || name.length > 50) {
+    errorMsgEl.textContent = 'Nome deve ter entre 2 e 50 caracteres';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  
+  // Verificar duplicata (customizada ou padrão)
+  const allCats = getAllCategories(state.userCategories);
+  if (allCats.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+    errorMsgEl.textContent = 'Essa categoria já existe';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  
+  errorEl.classList.add('hidden');
+  
+  try {
+    // Criar objeto categoria
+    const newCat = {
+      id: uid('cat'),
+      user_id: currentUser?.id || null,
+      name,
+      icon: _selectedCategoryIcon,
+      color_tone: _selectedCategoryTone,
+      is_default: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Adicionar ao state
+    if (!state.userCategories) state.userCategories = [];
+    state.userCategories.push(newCat);
+    state.lastUpdated = new Date().toISOString();
+    saveState();
+    
+    // Sincronizar para Supabase se online
+    if (isSupabaseConfigured && currentUser) {
+      try {
+        const { error } = await supabase.from('user_categories').insert([{
+          id: newCat.id,
+          user_id: currentUser.id,
+          name: newCat.name,
+          icon: newCat.icon,
+          color_tone: newCat.color_tone
+        }]);
+        if (error) throw error;
+      } catch (syncErr) {
+        console.warn('[Categories] Sync falhou, cat será salva localmente:', syncErr);
+        // Continua mesmo se sync falhar
+      }
+    }
+    
+    showToast(`✨ Categoria "${name}" criada com sucesso!`, 'success');
+    closeCategoryModal();
+    
+    // Re-renderizar dropdown de transações
+    renderTransactionFilters();
+    if (typeof window.renderAll === 'function') {
+      window.renderAll();
+    }
+    
+  } catch (err) {
+    console.error('[Categories] Erro ao criar:', err);
+    errorMsgEl.textContent = 'Erro: ' + (err.message || 'tente novamente');
+    errorEl.classList.remove('hidden');
+  }
+}
+
+// Exportar para serem acessadas globalmente
+window.openCategoryModal = openCategoryModal;
+window.closeCategoryModal = closeCategoryModal;
+window.saveCategoryModal = saveCategoryModal;

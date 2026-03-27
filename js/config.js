@@ -67,3 +67,53 @@ export function toneForCategory(category, positive = false) {
   if (positive) return 'tone-success';
   return toneByCategory[category] || 'tone-slate';
 }
+
+/**
+ * Retorna lista de TODAS as categorias (padrão + customizadas do usuário)
+ * Prioriza categorias customizadas quando há duplicata de nome
+ * @param {Array} userCategories - Array de user_categories do state
+ * @returns {Array} Lista de categorias ordenada [{name, icon, tone, isDefault, id?}]
+ */
+export function getAllCategories(userCategories = []) {
+  // Categorias padrão do sistema
+  const defaultCategories = CATEGORIES_LIST.map(name => ({
+    name,
+    icon: iconByCategory[name],
+    tone: toneByCategory[name],
+    isDefault: true
+  }));
+  
+  // Categorias customizadas do usuário
+  const customCategories = (userCategories || []).map(cat => ({
+    name: cat.name,
+    icon: cat.icon,
+    tone: cat.color_tone,
+    isDefault: false,
+    id: cat.id
+  }));
+  
+  // Mescla evitando duplicatas (prioriza customizadas)
+  const names = new Set();
+  const merged = [];
+  
+  // Adiciona customizadas primeiro
+  for (const cat of customCategories) {
+    const lowerName = cat.name.toLowerCase();
+    if (!names.has(lowerName)) {
+      names.add(lowerName);
+      merged.push(cat);
+    }
+  }
+  
+  // Depois adiciona padrões que não estão como customizadas
+  for (const cat of defaultCategories) {
+    const lowerName = cat.name.toLowerCase();
+    if (!names.has(lowerName)) {
+      names.add(lowerName);
+      merged.push(cat);
+    }
+  }
+  
+  // Ordena alfabeticamente
+  return merged.sort((a, b) => a.name.localeCompare(b.name));
+}

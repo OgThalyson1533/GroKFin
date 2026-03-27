@@ -98,6 +98,8 @@ export function buildSeedState() {
       'Saúde': 0,    'Metas': 0
     },
     goals: [],
+    // [NEW] Categorias customizadas criadas pelo usuário
+    userCategories: [],
     profile: {
       bannerImage: createDefaultBannerDataUrl(),
       avatarImage: createDefaultAvatarDataUrl('GrokFin User'),
