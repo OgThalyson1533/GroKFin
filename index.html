@@ -532,9 +532,6 @@
         <button class="tab-btn active" data-tab="login"    type="button">
           <i class="fa-solid fa-lock"></i> Login
         </button>
-        <button class="tab-btn" data-tab="supabase" type="button">
-          <i class="fa-solid fa-database"></i> Supabase
-        </button>
         <button class="tab-btn" data-tab="ia" type="button">
           <i class="fa-solid fa-robot"></i> IA
         </button>
@@ -596,58 +593,6 @@
           Integre com <code>supabase.auth.signInWithPassword()</code>,
           <code>signInWithOtp()</code> e
           <code>resetPasswordForEmail()</code> para autenticar de verdade.
-        </div>
-      </section>
-
-      <!-- ══════════════════════════════════════════════════════════ -->
-      <!-- TAB SUPABASE                                               -->
-      <!-- ══════════════════════════════════════════════════════════ -->
-      <section id="tab-supabase" class="tab-panel">
-        <div class="fields">
-
-          <div class="field">
-            <label for="supabaseUrl">Project URL</label>
-            <input id="supabaseUrl" type="url" placeholder="https://xxxx.supabase.co" />
-            <div class="hint">
-              <a href="https://app.supabase.com" target="_blank">app.supabase.com</a>
-              → Project Settings → API → Project URL
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="supabaseAnonKey">Anon Public Key</label>
-            <div class="input-wrap">
-              <input id="supabaseAnonKey" type="text" placeholder="eyJhbGci…"
-                style="font-family:ui-monospace,monospace;font-size:12.5px" />
-              <button type="button" class="input-suffix" id="copy-anon" title="Copiar">
-                <i class="fa-solid fa-copy"></i>
-              </button>
-            </div>
-            <div class="hint">Chave pública — pode ser usada no frontend com segurança.</div>
-          </div>
-
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="checks">
-          <label class="check"><input id="enableRls"      type="checkbox" checked /> RLS ativo</label>
-          <label class="check"><input id="enableRealtime" type="checkbox" checked /> Realtime</label>
-          <label class="check"><input id="enableStorage"  type="checkbox" checked /> Storage</label>
-        </div>
-
-        <div class="actions">
-          <button class="btn btn-primary" id="btnSaveSupabase" type="button">
-            <i class="fa-solid fa-floppy-disk"></i> Salvar
-          </button>
-          <button class="btn" id="btnTestSupabase" type="button">
-            <i class="fa-solid fa-plug" id="test-icon"></i>
-            <span id="test-label">Testar conexão</span>
-          </button>
-        </div>
-
-        <div class="footer-box">
-          Inicialização: <code>supabase.createClient(url, anonKey)</code>
         </div>
       </section>
 

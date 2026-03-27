@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GrokFin Debug — Verificar Credenciais</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0a0e27;
+      color: #eef6ff;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      padding: 30px;
+    }
+    h1 {
+      margin-bottom: 30px;
+      color: #8ddaf0;
+      font-size: 24px;
+    }
+    .check-item {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      border-left: 4px solid #78f0c3;
+    }
+    .check-item.error {
+      border-left-color: #ff8f8f;
+    }
+    .check-item.warning {
+      border-left-color: #ffd700;
+    }
+    .label {
+      font-weight: bold;
+      color: #9ab8ff;
+      margin-bottom: 8px;
+    }
+    .value {
+      word-break: break-all;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 8px;
+      color: #78f0c3;
+    }
+    .value.error {
+      color: #ff8f8f;
+    }
+    .status {
+      font-size: 14px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .status.ok {
+      color: #78f0c3;
+    }
+    .status.error {
+      color: #ff8f8f;
+    }
+    button {
+      background: #8ddaf0;
+      color: #0a0e27;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    button:hover {
+      background: #9ab8ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 GrokFin Debug — Verificar Credenciais</h1>
+    
+    <div id="results"></div>
+    
+    <button onclick="location.reload()">🔄 Recarregar</button>
+    <button onclick="location.href='http://localhost:3000/index.html'">➡️ Ir para Login</button>
+  </div>
+  <!-- Credenciais injetadas pelo servidor -->
+  <script>
+    window.__ENV_SUPABASE_URL = 'https://glyjmoacozaxucvkpxfj.supabase.co';
+    window.__ENV_SUPABASE_ANON_KEY = 'sb_publishable_ENfLOk9iK8-5yqn-OSQ8pw_GCmDqK7c';
+  </script>
+  <script>
+    const results = document.getElementById('results');
+    
+    function addCheck(label, status, value, isError = false) {
+      const item = document.createElement('div');
+      item.className = `check-item ${isError ? 'error' : status === '❌' ? 'error' : 'warning'}`;
+      item.innerHTML = `
+        <div class="label">${status} ${label}</div>
+        ${value ? `<div class="value">${value}</div>` : ''}
+      `;
+      results.appendChild(item);
+    }
+    
+    // 1. Verificar URL do Supabase
+    const supabaseUrl = window.__ENV_SUPABASE_URL;
+    if (supabaseUrl) {
+      addCheck('SUPABASE_URL', '✅', supabaseUrl);
+    } else {
+      addCheck('SUPABASE_URL', '❌', 'NÃO DEFINIDO - Problema no servidor!', true);
+    }
+    
+    // 2. Verificar Chave Anon
+    const supabaseKey = window.__ENV_SUPABASE_ANON_KEY;
+    if (supabaseKey) {
+      addCheck('SUPABASE_ANON_KEY', '✅', supabaseKey.substring(0, 30) + '...');
+    } else {
+      addCheck('SUPABASE_ANON_KEY', '❌', 'NÃO DEFINIDO - Problema no servidor!', true);
+    }
+    
+    // 3. Verificar se Supabase JS está carregado
+    if (typeof window.supabase !== 'undefined') {
+      addCheck('Supabase SDK', '✅', 'Carregado e disponível');
+    } else {
+      addCheck('Supabase SDK', '⚠️', 'Não carregado ainda (vai carregar em app.html)');
+    }
+    
+    // 4. Verificar localStorage
+    const localStorageSize = Object.keys(localStorage).length;
+    addCheck('localStorage', localStorageSize === 0 ? '✅' : '⚠️', 
+      `${localStorageSize} itens armazenados (deve estar vazio)`);
+    
+    // 5. Resumo
+    const summary = document.createElement('div');
+    summary.className = 'check-item';
+    summary.innerHTML = `
+      <div class="label">📋 Resumo</div>
+      ${supabaseUrl && supabaseKey ? 
+        `<div class="status ok">✅ Credenciais carregadas com sucesso!</div>
+         <div class="status ok">→ Acesse http://localhost:3000/index.html para fazer login</div>` :
+        `<div class="status error">❌ Problema ao carregar credenciais do servidor</div>
+         <div class="status error">→ Verifique se o servidor está rodando: npm start</div>
+         <div class="status error">→ Verifique se .env.local existe em supabase/</div>`
+      }
+    `;
+    results.appendChild(summary);
+  </script>
+</body>
+</html>
